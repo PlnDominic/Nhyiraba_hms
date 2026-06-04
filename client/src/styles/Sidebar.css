@@ -122,6 +122,41 @@
   100% { text-shadow: 0 0 10px rgba(255, 255, 255, 0.3); }
 }
 
+/* Logo and title layout */
+.title-with-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.hotel-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.hotel-logo:hover {
+  transform: scale(1.1);
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+}
+
+/* Dark mode logo adjustments */
+.sidebar-container.dark-mode .hotel-logo {
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.15);
+}
+
+/* Light mode logo adjustments */
+.sidebar-container.light-mode .hotel-logo {
+  border-color: rgba(0, 0, 0, 0.2);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
 /* Navigation section */
 .sidebar-navigation {
   flex: 1;
@@ -338,26 +373,39 @@
 /* Responsive styles */
 @media (max-width: 768px) {
   .sidebar-container {
-    width: 60px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 280px;
+    transform: translateX(-100%);
+    z-index: 1000;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
   
   .sidebar-container.expanded {
-    width: 200px;
+    width: 280px;
+    transform: translateX(0);
+  }
+  
+  /* Show backdrop when expanded on mobile */
+  .sidebar-container.expanded .sidebar-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: -1;
   }
   
   .link-text {
-    display: none;
-  }
-  
-  .sidebar-container.expanded .link-text {
     display: block;
   }
   
   .footer-button span {
-    display: none;
-  }
-  
-  .sidebar-container.expanded .footer-button span {
     display: block;
   }
 } 

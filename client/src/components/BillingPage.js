@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import Sidebar from './Sidebar';
-import Navbar from './Navbar';
+import DashboardLayout from './DashboardLayout';
 import { useTheme } from '../context/ThemeContext';
 import InvoiceModal from './InvoiceModal';
 import { useRoomReservation } from '../context/RoomReservationContext';
@@ -25,16 +24,16 @@ const BillingPage = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       // First fetch invoices
       const { data, error } = await supabase
         .from('invoices')
         .select('*')
         .order('created_at', { ascending: false });
-      
+
       if (error) {
         console.error('Error fetching invoices:', error);
-        
+
         // Provide more specific error messages based on the error type
         if (error.code === '42501' || error.message.includes('permission denied') || error.message.includes('policy')) {
           setError('Row-Level Security Policy Error: You don\'t have permission to access invoices. Please check README-RLS-FIX.md for instructions on how to fix this.');
@@ -43,7 +42,7 @@ const BillingPage = () => {
         } else {
           setError(error.message);
         }
-        
+
         // Handle error gracefully
         console.warn('Failed to fetch invoices from database');
         setInvoices([]);
@@ -67,7 +66,7 @@ const BillingPage = () => {
           hasServiceItems: invoice.has_service_items || false,
           serviceItems: []
         }));
-        
+
         // For invoices with service items, fetch the items
         for (const invoice of formattedInvoices) {
           if (invoice.hasServiceItems) {
@@ -75,7 +74,7 @@ const BillingPage = () => {
               .from('invoice_items')
               .select('*')
               .eq('invoice_id', invoice.id);
-              
+
             if (!itemsError && itemsData && itemsData.length > 0) {
               invoice.serviceItems = itemsData.map(item => ({
                 id: item.id,
@@ -86,20 +85,20 @@ const BillingPage = () => {
             }
           }
         }
-        
+
         setInvoices(formattedInvoices);
-        
+
         // Update revenue stats based on loaded invoices
         const totalPaidAmount = formattedInvoices
           .filter(invoice => invoice.status === 'Paid')
           .reduce((sum, invoice) => sum + invoice.amount, 0);
-        
+
         // Reset revenue to match Supabase data
         updateRevenueStats(0, true); // Reset revenue to zero first
         if (totalPaidAmount > 0) {
           updateRevenueStats(totalPaidAmount); // Add the calculated amount
         }
-        
+
         // Update dashboard notification with latest revenue data
         const revenueNotification = {
           type: 'revenue_update',
@@ -112,7 +111,7 @@ const BillingPage = () => {
     } catch (err) {
       console.error('Unexpected error fetching invoices:', err);
       setError('Failed to load invoices. Please try again later. If problems persist, check README-RLS-FIX.md for troubleshooting steps.');
-      
+
       // Handle error gracefully
       console.warn('Failed to fetch invoices from database');
       setInvoices([]);
@@ -140,24 +139,24 @@ const BillingPage = () => {
       if (newInvoice.id && !newInvoice.isLocalOnly) {
         console.log('Adding database-saved invoice to state:', newInvoice);
         setInvoices(prevInvoices => [newInvoice, ...prevInvoices]);
-        
+
         // Add notification to dashboard
         toast.success(`Invoice created for ${newInvoice.guest} - Room ${newInvoice.room}${newInvoice.serviceItems && newInvoice.serviceItems.length > 0 ? ` with ${newInvoice.serviceItems.length} service items` : ''}`);
-        
+
         // Update revenue stats if the invoice is marked as paid
         if (newInvoice.status === 'Paid') {
           updateRevenueStats(newInvoice.amount);
         }
-        
+
         // Refresh the entire invoice list to ensure database sync
         fetchInvoices();
         return;
       }
-      
+
       // Handle local-only invoices or fallbacks
       if (newInvoice.isLocalOnly) {
         console.warn('Handling local-only invoice (database save failed):', newInvoice);
-        
+
         // Add to our state with generated ID if needed
         const invoiceWithId = {
           ...newInvoice,
@@ -165,9 +164,9 @@ const BillingPage = () => {
           date: newInvoice.date || new Date().toISOString().split('T')[0],
           hasServiceItems: newInvoice.serviceItems && newInvoice.serviceItems.length > 0
         };
-        
+
         setInvoices(prevInvoices => [invoiceWithId, ...prevInvoices]);
-        
+
         // Add notification about local-only invoice
         toast('Invoice created but stored locally only. Database save failed.', {
           icon: '⚠️',
@@ -177,7 +176,7 @@ const BillingPage = () => {
             color: '#854d0e',
           },
         });
-        
+
         // Update revenue stats if the invoice is marked as paid even if Supabase fails
         if (newInvoice.status === 'Paid') {
           updateRevenueStats(newInvoice.amount);
@@ -193,11 +192,11 @@ const BillingPage = () => {
   const addNotification = (notification) => {
     try {
       console.log('Notification:', notification);
-      
+
       // Dispatch revenue update event if this is a revenue-related notification
       if (notification.type === 'revenue_update') {
         const revenueEvent = new CustomEvent('hotelRevenueUpdate', {
-          detail: { totalRevenue: totalRevenue }
+          detail: { forceRefresh: true }
         });
         document.dispatchEvent(revenueEvent);
       }
@@ -215,17 +214,17 @@ const BillingPage = () => {
       // Use retry logic for database updates
       let retryCount = 0;
       let updateError;
-      
+
       while (retryCount < 3) {
         const { error } = await supabase
           .from('invoices')
           .update({ status: newStatus })
           .eq('id', id);
-        
+
         updateError = error;
-        
+
         if (!updateError) break;
-        
+
         retryCount++;
         // Wait a bit before retrying
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -239,12 +238,12 @@ const BillingPage = () => {
         // Refresh invoices to ensure database sync
         fetchInvoices();
       }
-      
+
       // Add notification for payment status change
       toast.success(`Invoice for ${invoiceToUpdate.guest} marked as ${newStatus}`);
 
       // Update local state regardless of Supabase result
-      setInvoices(prevInvoices => 
+      setInvoices(prevInvoices =>
         prevInvoices.map(invoice => {
           if (invoice.id === id) {
             // If changing to Paid and was not Paid before, update revenue
@@ -263,7 +262,7 @@ const BillingPage = () => {
     } catch (err) {
       console.error('Unexpected error updating invoice status:', err);
       // Continue with local update even if Supabase fails
-      setInvoices(prevInvoices => 
+      setInvoices(prevInvoices =>
         prevInvoices.map(invoice => {
           if (invoice.id === id) {
             return { ...invoice, status: newStatus };
@@ -279,34 +278,34 @@ const BillingPage = () => {
     if (!window.confirm('Are you sure you want to delete this invoice? This action cannot be undone.')) {
       return;
     }
-    
+
     try {
       const invoiceToDelete = invoices.find(invoice => invoice.id === id);
-      
+
       // Check if this is a database-stored invoice or local-only
       if (!invoiceToDelete.isLocalOnly) {
         // This is a database invoice - delete from Supabase
         console.log('Deleting invoice from database:', id);
-        
+
         const { error } = await supabase
           .from('invoices')
           .delete()
           .eq('id', id);
-        
+
         if (error) {
           console.error('Error deleting invoice from database:', error);
           throw new Error(`Failed to delete invoice: ${error.message}`);
         }
       }
-      
+
       // Remove from local state
       setInvoices(prevInvoices => prevInvoices.filter(invoice => invoice.id !== id));
-      
+
       // Adjust revenue stats if it was a paid invoice
       if (invoiceToDelete && invoiceToDelete.status === 'Paid') {
         updateRevenueStats(-invoiceToDelete.amount); // Subtract the amount
       }
-      
+
       // Add notification about deletion
       toast(`Invoice for ${invoiceToDelete.guest} has been deleted.`, {
         icon: '⚠️',
@@ -316,7 +315,7 @@ const BillingPage = () => {
           color: '#854d0e',
         },
       });
-      
+
     } catch (err) {
       console.error('Error deleting invoice:', err);
       toast.error(`Error deleting invoice: ${err.message}`);
@@ -326,10 +325,10 @@ const BillingPage = () => {
   // View invoice details
   const viewInvoice = (invoice) => {
     const receiptWindow = window.open('', '_blank');
-    
+
     // Use our utility function for date formatting
     const formatDateDisplay = formatDate;
-    
+
     // Create receipt HTML
     const receiptHtml = `
       <!DOCTYPE html>
@@ -416,7 +415,7 @@ const BillingPage = () => {
       <body>
         <div class="receipt">
           <div class="header">
-            <div class="hotel-name">Lavimac Royal Hotel</div>
+            <div class="hotel-name">Nhyiraba Hotel</div>
             <div class="invoice-title">INVOICE / RECEIPT</div>
             <div class="invoice-number">Invoice #: INV-${String(invoice.id).padStart(5, '0')}</div>
           </div>
@@ -504,7 +503,7 @@ const BillingPage = () => {
       </body>
       </html>
     `;
-    
+
     receiptWindow.document.open();
     receiptWindow.document.write(receiptHtml);
     receiptWindow.document.close();
@@ -531,106 +530,102 @@ const BillingPage = () => {
   };
 
   return (
-    <div className={`flex h-screen ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
-      <Sidebar activeLink="Billing" />
-      <div className="flex-1 overflow-auto">
-        <Navbar title="Billing Management" />
-        
-        <div className="p-6 space-y-6">
-          {/* Revenue Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className={`relative overflow-hidden rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105 hover:shadow-xl
-              ${isDarkMode 
-                ? 'bg-gradient-to-br from-gray-800/80 to-gray-900/90 backdrop-blur-lg border border-gray-700/50 text-white' 
-                : 'bg-gradient-to-br from-white/90 to-gray-50/90 backdrop-blur-lg border border-gray-200/50 text-gray-800'}`}>
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-green-600"></div>
-        <div className="p-6">
-                <div className="flex items-center justify-between">
-              <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Total Revenue</h3>
-                  <div className={`rounded-full p-2 ${isDarkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-600'}`}>
-                    <FontAwesomeIcon icon={faMoneyBillWave} />
-                  </div>
+    <DashboardLayout title="Billing Management" activeLink="Billing">
+      <div className="space-y-6">
+        {/* Revenue Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className={`relative overflow-hidden rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105 hover:shadow-xl
+              ${isDarkMode
+              ? 'bg-gradient-to-br from-gray-800/80 to-gray-900/90 backdrop-blur-lg border border-gray-700/50 text-white'
+              : 'bg-gradient-to-br from-white/90 to-gray-50/90 backdrop-blur-lg border border-gray-200/50 text-gray-800'}`}>
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-green-600"></div>
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Total Revenue</h3>
+                <div className={`rounded-full p-2 ${isDarkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-600'}`}>
+                  <FontAwesomeIcon icon={faMoneyBillWave} />
                 </div>
-                <p className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-green-600">
-                  GH₵{totalRevenue.toLocaleString()}
-                </p>
               </div>
-            </div>
-            
-            <div className={`relative overflow-hidden rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105 hover:shadow-xl
-              ${isDarkMode 
-                ? 'bg-gradient-to-br from-gray-800/80 to-gray-900/90 backdrop-blur-lg border border-gray-700/50 text-white' 
-                : 'bg-gradient-to-br from-white/90 to-gray-50/90 backdrop-blur-lg border border-gray-200/50 text-gray-800'}`}>
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-amber-600"></div>
-              <div className="p-6">
-                <div className="flex items-center justify-between">
-              <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Pending Payments</h3>
-                  <div className={`rounded-full p-2 ${isDarkMode ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-100 text-amber-600'}`}>
-                    <FontAwesomeIcon icon={faFileInvoiceDollar} />
-                  </div>
-                </div>
-                <p className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-amber-400 to-amber-600">
-                GH₵{invoices.filter(invoice => invoice.status === 'Pending').reduce((sum, invoice) => sum + invoice.amount, 0).toLocaleString()}
+              <p className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-green-600">
+                GH₵{totalRevenue.toLocaleString()}
               </p>
-              </div>
-            </div>
-            
-            <div className={`relative overflow-hidden rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105 hover:shadow-xl
-              ${isDarkMode 
-                ? 'bg-gradient-to-br from-gray-800/80 to-gray-900/90 backdrop-blur-lg border border-gray-700/50 text-white' 
-                : 'bg-gradient-to-br from-white/90 to-gray-50/90 backdrop-blur-lg border border-gray-200/50 text-gray-800'}`}>
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-indigo-600"></div>
-              <div className="p-6">
-                <div className="flex items-center justify-between">
-              <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Total Invoices</h3>
-                  <div className={`rounded-full p-2 ${isDarkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'}`}>
-                    <FontAwesomeIcon icon={faReceipt} />
-                  </div>
-                </div>
-                <p className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-600">
-                  {invoices.length}
-                </p>
-              </div>
             </div>
           </div>
-          
-          {/* Invoices Table Header */}
-          <div className={`relative overflow-hidden rounded-xl shadow-lg 
-            ${isDarkMode 
-              ? 'bg-gradient-to-br from-gray-800/80 to-gray-900/90 backdrop-blur-lg border border-gray-700/50 text-white' 
+
+          <div className={`relative overflow-hidden rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105 hover:shadow-xl
+              ${isDarkMode
+              ? 'bg-gradient-to-br from-gray-800/80 to-gray-900/90 backdrop-blur-lg border border-gray-700/50 text-white'
               : 'bg-gradient-to-br from-white/90 to-gray-50/90 backdrop-blur-lg border border-gray-200/50 text-gray-800'}`}>
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-amber-600"></div>
             <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className={`text-lg font-semibold bg-clip-text text-transparent bg-gradient-to-r ${isDarkMode ? 'from-blue-400 to-indigo-500' : 'from-blue-600 to-indigo-700'}`}>
-                  Billing Overview
-                </h3>
-                <button 
-                  onClick={() => setShowInvoiceModal(true)} 
-                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-200 transform hover:scale-105 flex items-center"
+              <div className="flex items-center justify-between">
+                <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Pending Payments</h3>
+                <div className={`rounded-full p-2 ${isDarkMode ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-100 text-amber-600'}`}>
+                  <FontAwesomeIcon icon={faFileInvoiceDollar} />
+                </div>
+              </div>
+              <p className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-amber-400 to-amber-600">
+                GH₵{invoices.filter(invoice => invoice.status === 'Pending').reduce((sum, invoice) => sum + invoice.amount, 0).toLocaleString()}
+              </p>
+            </div>
+          </div>
+
+          <div className={`relative overflow-hidden rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105 hover:shadow-xl
+              ${isDarkMode
+              ? 'bg-gradient-to-br from-gray-800/80 to-gray-900/90 backdrop-blur-lg border border-gray-700/50 text-white'
+              : 'bg-gradient-to-br from-white/90 to-gray-50/90 backdrop-blur-lg border border-gray-200/50 text-gray-800'}`}>
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-indigo-600"></div>
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Total Invoices</h3>
+                <div className={`rounded-full p-2 ${isDarkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'}`}>
+                  <FontAwesomeIcon icon={faReceipt} />
+                </div>
+              </div>
+              <p className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-600">
+                {invoices.length}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Invoices Table Header */}
+        <div className={`relative overflow-hidden rounded-xl shadow-lg 
+            ${isDarkMode
+            ? 'bg-gradient-to-br from-gray-800/80 to-gray-900/90 backdrop-blur-lg border border-gray-700/50 text-white'
+            : 'bg-gradient-to-br from-white/90 to-gray-50/90 backdrop-blur-lg border border-gray-200/50 text-gray-800'}`}>
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className={`text-lg font-semibold bg-clip-text text-transparent bg-gradient-to-r ${isDarkMode ? 'from-blue-400 to-indigo-500' : 'from-blue-600 to-indigo-700'}`}>
+                Billing Overview
+              </h3>
+              <button
+                onClick={() => setShowInvoiceModal(true)}
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-200 transform hover:scale-105 flex items-center"
+              >
+                <FontAwesomeIcon icon={faCreditCard} className="mr-2" />
+                Create Invoice
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="flex justify-center items-center p-8">
+                <div className="relative w-16 h-16">
+                  <div className="absolute top-0 left-0 w-full h-full border-4 border-blue-500/20 rounded-full animate-pulse"></div>
+                  <div className="absolute top-0 left-0 w-full h-full border-4 border-transparent border-t-blue-500 rounded-full animate-spin"></div>
+                </div>
+              </div>
+            ) : error ? (
+              <div className={`rounded-lg p-4 ${isDarkMode ? 'bg-red-900/30 border border-red-800/50 text-red-300' : 'bg-red-100 border border-red-200 text-red-700'}`}>
+                <p className="mb-2">{error}</p>
+                <button
+                  onClick={() => fetchInvoices()}
+                  className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-200"
                 >
-                  <FontAwesomeIcon icon={faCreditCard} className="mr-2" />
-                  Create Invoice
+                  Retry
                 </button>
               </div>
-              
-              {loading ? (
-                <div className="flex justify-center items-center p-8">
-                  <div className="relative w-16 h-16">
-                    <div className="absolute top-0 left-0 w-full h-full border-4 border-blue-500/20 rounded-full animate-pulse"></div>
-                    <div className="absolute top-0 left-0 w-full h-full border-4 border-transparent border-t-blue-500 rounded-full animate-spin"></div>
-                  </div>
-                </div>
-              ) : error ? (
-                <div className={`rounded-lg p-4 ${isDarkMode ? 'bg-red-900/30 border border-red-800/50 text-red-300' : 'bg-red-100 border border-red-200 text-red-700'}`}>
-                  <p className="mb-2">{error}</p>
-                  <button 
-                    onClick={() => fetchInvoices()} 
-                    className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-200"
-                  >
-                    Retry
-                  </button>
-                </div>
-              ) : (
+            ) : (
               <div className="overflow-auto rounded-lg">
                 <table className="min-w-full divide-y divide-gray-200/10">
                   <thead className={isDarkMode ? 'bg-gray-800/60' : 'bg-gray-100/80'}>
@@ -662,13 +657,13 @@ const BillingPage = () => {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                                ${invoice.status === 'Paid' 
+                                ${invoice.status === 'Paid'
                                   ? isDarkMode ? 'bg-green-900/30 text-green-400 border border-green-700/30' : 'bg-green-100 text-green-800 border border-green-200'
                                   : invoice.status === 'Pending'
-                                  ? isDarkMode ? 'bg-amber-900/30 text-amber-400 border border-amber-700/30' : 'bg-amber-100 text-amber-800 border border-amber-200'
-                                  : invoice.status === 'Refunded'
-                                  ? isDarkMode ? 'bg-blue-900/30 text-blue-400 border border-blue-700/30' : 'bg-blue-100 text-blue-800 border border-blue-200'
-                                  : isDarkMode ? 'bg-red-900/30 text-red-400 border border-red-700/30' : 'bg-red-100 text-red-800 border border-red-200'
+                                    ? isDarkMode ? 'bg-amber-900/30 text-amber-400 border border-amber-700/30' : 'bg-amber-100 text-amber-800 border border-amber-200'
+                                    : invoice.status === 'Refunded'
+                                      ? isDarkMode ? 'bg-blue-900/30 text-blue-400 border border-blue-700/30' : 'bg-blue-100 text-blue-800 border border-blue-200'
+                                      : isDarkMode ? 'bg-red-900/30 text-red-400 border border-red-700/30' : 'bg-red-100 text-red-800 border border-red-200'
                                 }`}>
                                 {invoice.status}
                               </span>
@@ -676,7 +671,7 @@ const BillingPage = () => {
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                               <div className="flex justify-end space-x-3">
                                 {invoice.status !== 'Paid' && (
-                                  <button 
+                                  <button
                                     onClick={() => handlePaymentStatusChange(invoice.id, 'Paid')}
                                     className={`rounded-full p-1.5 transition-all duration-200 transform hover:scale-110
                                       ${isDarkMode ? 'bg-green-900/30 text-green-400 hover:bg-green-900/50' : 'bg-green-100 text-green-600 hover:bg-green-200'}`}
@@ -685,9 +680,9 @@ const BillingPage = () => {
                                     <FontAwesomeIcon icon={faCheck} size="sm" />
                                   </button>
                                 )}
-                                
+
                                 {invoice.status !== 'Cancelled' && (
-                                  <button 
+                                  <button
                                     onClick={() => handlePaymentStatusChange(invoice.id, 'Cancelled')}
                                     className={`rounded-full p-1.5 transition-all duration-200 transform hover:scale-110
                                       ${isDarkMode ? 'bg-red-900/30 text-red-400 hover:bg-red-900/50' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}
@@ -696,9 +691,9 @@ const BillingPage = () => {
                                     <FontAwesomeIcon icon={faTimes} size="sm" />
                                   </button>
                                 )}
-                                
+
                                 {invoice.status === 'Paid' && (
-                                  <button 
+                                  <button
                                     onClick={() => handlePaymentStatusChange(invoice.id, 'Refunded')}
                                     className={`rounded-full p-1.5 transition-all duration-200 transform hover:scale-110
                                       ${isDarkMode ? 'bg-amber-900/30 text-amber-400 hover:bg-amber-900/50' : 'bg-amber-100 text-amber-600 hover:bg-amber-200'}`}
@@ -707,8 +702,8 @@ const BillingPage = () => {
                                     <FontAwesomeIcon icon={faUndo} size="sm" />
                                   </button>
                                 )}
-                                
-                                <button 
+
+                                <button
                                   onClick={() => viewInvoice(invoice)}
                                   className={`rounded-full p-1.5 transition-all duration-200 transform hover:scale-110
                                     ${isDarkMode ? 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50' : 'bg-blue-100 text-blue-600 hover:bg-blue-200'}`}
@@ -716,8 +711,8 @@ const BillingPage = () => {
                                 >
                                   <FontAwesomeIcon icon={faEye} size="sm" />
                                 </button>
-                                
-                                <button 
+
+                                <button
                                   onClick={() => editInvoice(invoice)}
                                   className={`rounded-full p-1.5 transition-all duration-200 transform hover:scale-110
                                     ${isDarkMode ? 'bg-indigo-900/30 text-indigo-400 hover:bg-indigo-900/50' : 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200'}`}
@@ -725,8 +720,8 @@ const BillingPage = () => {
                                 >
                                   <FontAwesomeIcon icon={faEdit} size="sm" />
                                 </button>
-                                
-                                <button 
+
+                                <button
                                   onClick={() => handleDeleteInvoice(invoice.id)}
                                   className={`rounded-full p-1.5 transition-all duration-200 transform hover:scale-110
                                     ${isDarkMode ? 'bg-red-900/30 text-red-400 hover:bg-red-900/50' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}
@@ -737,7 +732,7 @@ const BillingPage = () => {
                               </div>
                             </td>
                           </tr>
-                          
+
                           {/* Service items row */}
                           {invoice.hasServiceItems && invoice.serviceItems.length > 0 && (
                             <tr className={isDarkMode ? 'bg-gray-800/20' : 'bg-gray-50/70'}>
@@ -745,11 +740,10 @@ const BillingPage = () => {
                                 <div className={`text-xs font-medium mb-1.5 uppercase tracking-wider ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>Service Items</div>
                                 <div className="grid grid-cols-3 gap-3">
                                   {invoice.serviceItems.map((item, idx) => (
-                                    <div key={idx} className={`text-sm rounded-lg px-3 py-2 border ${
-                                      isDarkMode 
-                                        ? 'bg-gray-800/80 border-gray-700/40 shadow-inner shadow-gray-900/30' 
-                                        : 'bg-white/80 border-gray-200/40 shadow-sm'
-                                    }`}>
+                                    <div key={idx} className={`text-sm rounded-lg px-3 py-2 border ${isDarkMode
+                                      ? 'bg-gray-800/80 border-gray-700/40 shadow-inner shadow-gray-900/30'
+                                      : 'bg-white/80 border-gray-200/40 shadow-sm'
+                                      }`}>
                                       <span className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{item.name}</span>
                                       <span className={`ml-2 font-medium ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>GH₵{item.price.toFixed(2)}</span>
                                       <span className={`block mt-0.5 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{item.date}</span>
@@ -767,8 +761,8 @@ const BillingPage = () => {
                           <div className="flex flex-col items-center">
                             <FontAwesomeIcon icon={faFileInvoiceDollar} className={`text-4xl mb-3 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`} />
                             <p>No invoices found</p>
-                            <button 
-                              onClick={() => setShowInvoiceModal(true)} 
+                            <button
+                              onClick={() => setShowInvoiceModal(true)}
                               className="mt-3 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:shadow-lg transition-all duration-200"
                             >
                               Create Your First Invoice
@@ -780,23 +774,22 @@ const BillingPage = () => {
                   </tbody>
                 </table>
               </div>
-              )}
-            </div>
+            )}
           </div>
         </div>
       </div>
-      
+
       {/* Invoice Modal */}
-      <InvoiceModal 
-        isOpen={showInvoiceModal} 
+      <InvoiceModal
+        isOpen={showInvoiceModal}
         onClose={() => {
           setShowInvoiceModal(false);
           setSelectedInvoice(null);
-        }} 
+        }}
         onCreateInvoice={handleCreateInvoice}
         invoiceToEdit={selectedInvoice}
       />
-    </div>
+    </DashboardLayout>
   );
 };
 

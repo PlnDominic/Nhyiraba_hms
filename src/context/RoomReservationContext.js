@@ -397,7 +397,7 @@ export const RoomReservationProvider = ({ children }) => {
         check_in_date: new Date().toISOString(),
         check_out_date: guestData.checkOutDate || new Date(Date.now() + 86400000 * 3).toISOString(), // Default: 3 days
         status: 'Checked In',
-        room_type: state.rooms.find(r => r.id === roomId)?.type || 'Standard',
+        room_price: state.rooms.find(r => r.id === roomId)?.price || 0,
         special_requests: guestData.specialRequests || '',
         payment_method: 'Credit Card',
         payment_status: 'Pending',
@@ -548,7 +548,7 @@ export const RoomReservationProvider = ({ children }) => {
         payment_status: 'Pending',
         adults: reservationDetails.adults || 1,
         children: reservationDetails.children || 0,
-        room_type: reservationDetails.roomType || state.rooms.find(r => r.id === roomId)?.type || 'Standard',
+        room_price: state.rooms.find(r => r.id === roomId)?.price || 0,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -685,7 +685,7 @@ export const RoomReservationProvider = ({ children }) => {
             guest_name: reservationData.guestName,
             guest_email: reservationData.email,
             guest_phone: reservationData.phoneNumber,
-            room_type: reservationData.roomType,
+            room_price: reservationData.roomPrice || reservationData.room_rate || 0,
             room_number: reservationData.roomNumber,
             check_in_date: reservationData.checkInDate,
             check_out_date: reservationData.checkOutDate,

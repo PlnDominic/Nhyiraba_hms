@@ -382,7 +382,7 @@ export async function createInitialSchema(db) {
   await db.executeStatement(`
     INSERT OR IGNORE INTO local_settings (key, value, type)
     VALUES 
-      ('hotel_name', 'Lavimac Royal Hotel', 'string'),
+      ('hotel_name', 'Nhyiraba Hotel', 'string'),
       ('currency', 'GHS', 'string'),
       ('timezone', 'GMT', 'string'),
       ('auto_sync_interval', '300', 'number'),

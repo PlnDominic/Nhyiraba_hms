@@ -3,6 +3,9 @@ const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
+// Email service
+const { sendApprovalEmail, testEmailConfig } = require('./server/emailService');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -165,6 +168,77 @@ app.get('/api/reservations', async (req, res) => {
         res.status(500).json({ 
             success: false, 
             error: error.message 
+        });
+    }
+});
+
+// ==================== EMAIL API ENDPOINTS ====================
+
+// POST endpoint to send approval email
+app.post('/api/send-approval-email', async (req, res) => {
+    try {
+        const { email, fullName, password, hotelName } = req.body;
+
+        if (!email || !fullName || !password) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields: email, fullName, password'
+            });
+        }
+
+        const result = await sendApprovalEmail({
+            email,
+            fullName,
+            password,
+            hotelName: hotelName || 'Nhyiraba Hotel Management System'
+        });
+
+        if (result.skipped) {
+            // Email service not configured, but don't fail the request
+            return res.json({
+                success: true,
+                skipped: true,
+                message: 'Email service not configured - email not sent'
+            });
+        }
+
+        if (!result.success) {
+            return res.status(500).json({
+                success: false,
+                error: result.error || 'Failed to send email'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Approval email sent successfully',
+            messageId: result.messageId
+        });
+
+    } catch (error) {
+        console.error('Error in send-approval-email endpoint:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to send approval email'
+        });
+    }
+});
+
+// GET endpoint to test email configuration
+app.get('/api/test-email', async (req, res) => {
+    try {
+        const isConfigured = await testEmailConfig();
+        res.json({
+            success: true,
+            configured: isConfigured,
+            message: isConfigured 
+                ? 'Email service is properly configured' 
+                : 'Email service not configured. Set EMAIL_USER and EMAIL_PASSWORD in .env'
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
         });
     }
 });

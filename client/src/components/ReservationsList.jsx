@@ -13,11 +13,11 @@ import { deleteReservation } from '../services/reservationService';
 const ReservationsList = () => {
   const { theme } = useTheme();
   const isDarkMode = theme === 'dark';
-  const { 
-    reservations, 
-    loading, 
-    error, 
-    cancelReservation, 
+  const {
+    reservations,
+    loading,
+    error,
+    cancelReservation,
     checkInGuest,
     checkOutGuest,
     rooms,
@@ -26,10 +26,10 @@ const ReservationsList = () => {
   } = useRoomReservation();
   const { addGuestToList } = useGuests();
   const [filteredReservations, setFilteredReservations] = useState([]);
-  const [statusFilter, setStatusFilter] = useState('active');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showDebug, setShowDebug] = useState(false); // Hidden by default
-  
+
   // Modal states for actions
   const [showRoomAvailabilityModal, setShowRoomAvailabilityModal] = useState(false);
   const [showCancellationModal, setShowCancellationModal] = useState(false);
@@ -46,34 +46,41 @@ const ReservationsList = () => {
   const [toastMessage, setToastMessage] = useState(null);
 
   useEffect(() => {
+    // Debug logging
+    console.log('ReservationsList - Raw reservations:', reservations);
+    console.log('ReservationsList - Current status filter:', statusFilter);
+
     // Apply filters to reservations
     let filtered = [...reservations];
-    
+
     // Apply status filter
     if (statusFilter === 'active') {
       // Only show active reservations (Reserved or Confirmed, not Checked In)
-      filtered = filtered.filter(res => 
-        res.status === 'Reserved' || 
-        res.status === 'Confirmed'
-      );
+      filtered = filtered.filter(res => {
+        const status = (res.status || '').toLowerCase();
+        return status === 'reserved' || status === 'confirmed';
+      });
     } else if (statusFilter !== 'all') {
-      filtered = filtered.filter(res => res.status === statusFilter);
+      filtered = filtered.filter(res => {
+        const status = (res.status || '').toLowerCase();
+        return status === statusFilter.toLowerCase();
+      });
     }
-    
+
     // Apply search term filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(res => 
-        (res.guest_name && res.guest_name.toLowerCase().includes(term)) || 
+      filtered = filtered.filter(res =>
+        (res.guest_name && res.guest_name.toLowerCase().includes(term)) ||
         (res.room_id && res.room_id.toString().includes(term))
       );
     }
-    
+
     // Enhance reservations with room details
     filtered = filtered.map(reservation => {
       // Find the corresponding room
       const room = rooms.find(r => r.id === reservation.room_id);
-      
+
       // Create enhanced reservation with proper field mappings
       const enhancedReservation = {
         ...reservation,
@@ -94,15 +101,15 @@ const ReservationsList = () => {
         check_in_date: reservation.checkInDate || reservation.check_in_date,
         check_out_date: reservation.checkOutDate || reservation.check_out_date,
       };
-      
+
       return enhancedReservation;
     });
-    
+
     // Sort by check-in date (newest first)
     filtered.sort((a, b) => new Date(b.check_in_date) - new Date(a.check_in_date));
-    
+
     setFilteredReservations(filtered);
-    
+
     // Initialize animation states for new items
     const newAnimatedItems = {};
     filtered.forEach((res, index) => {
@@ -125,7 +132,7 @@ const ReservationsList = () => {
     if (!window.confirm("Are you sure you want to cancel this reservation?")) {
       return;
     }
-    
+
     try {
       const result = await cancelReservation(id);
       if (result.success) {
@@ -133,16 +140,16 @@ const ReservationsList = () => {
           text: "Reservation cancelled successfully",
           type: "success"
         });
-        
+
         // Update the animation state to fade out the item
         setAnimatedItems(prev => ({
           ...prev,
           [id]: true
         }));
-        
+
         // Remove the reservation from the list after animation
         setTimeout(() => {
-          setFilteredReservations(prevReservations => 
+          setFilteredReservations(prevReservations =>
             prevReservations.filter(reservation => reservation.id !== id)
           );
         }, 300);
@@ -186,14 +193,14 @@ const ReservationsList = () => {
         // Step 1: Add the guest to the guest list
         console.log('Adding guest from reservation:', guestData);
         const guestResult = await addGuestToList(guestData);
-        
+
         if (!guestResult || !guestResult.success) {
           console.error('Failed to add guest to guest list:', guestResult?.error || 'Unknown error');
           alert('Warning: Guest check-in succeeded but failed to add to guest directory. Please add manually.');
         } else {
           console.log('Successfully added guest to directory with ID:', guestResult.data?.id);
         }
-        
+
         // Step 2: DELETE the reservation from the database FIRST
         console.log('Deleting reservation:', reservation.id);
         const deleteResult = await deleteReservation(reservation.id);
@@ -202,56 +209,56 @@ const ReservationsList = () => {
         } else {
           console.log('Reservation successfully deleted after check-in');
         }
-        
+
         // Step 3: DIRECTLY update the room status in Supabase to ensure consistency
         console.log('Directly updating room status to Occupied for room:', reservation.room_id);
         const { error: roomUpdateError } = await supabase
           .from('rooms')
-          .update({ 
+          .update({
             status: 'Occupied',
             guest: reservation.guest_name,
             updated_at: new Date().toISOString()
           })
           .eq('id', reservation.room_id);
-          
+
         if (roomUpdateError) {
           console.error('Error updating room status directly:', roomUpdateError);
           alert('Warning: Room status may not be updated correctly. Please check.');
         }
-        
+
         // Step 4: Now use the checkInGuest function (which might have its own logic we want to preserve)
         const roomResult = await checkInGuest(reservation.room_id, {
           name: reservation.guest_name,
           email: reservation.guest_email,
           phone: reservation.guest_phone
         });
-        
+
         if (!roomResult.success) {
           console.error('Error in checkInGuest function:', roomResult.error);
           alert(`Warning: Room status update through checkInGuest failed: ${roomResult.error}`);
         }
-        
+
         // Step 5: Force a refresh of data
         await refreshData();
-        
+
         // Step 6: Update local UI state
-        setFilteredReservations(prev => 
+        setFilteredReservations(prev =>
           prev.filter(res => res.id !== reservation.id)
         );
-        
+
         // Step 7: Trigger an update for the Dashboard's room status display
         const roomStatusEvent = new CustomEvent('hotelRoomStatusUpdate', {
-          detail: { 
-            roomId: reservation.room_id, 
+          detail: {
+            roomId: reservation.room_id,
             status: 'Occupied',
             forceRefresh: true  // Add a flag to force refresh
           }
         });
         document.dispatchEvent(roomStatusEvent);
-        
+
         // Step 8: Notify that a guest was checked in (for other components that need to update)
         const guestCheckInEvent = new CustomEvent('hotelGuestCheckIn', {
-          detail: { 
+          detail: {
             guestId: guestResult?.data?.id,
             guestName: reservation.guest_name,
             roomId: reservation.room_id,
@@ -259,18 +266,18 @@ const ReservationsList = () => {
           }
         });
         document.dispatchEvent(guestCheckInEvent);
-        
+
         // Step 9: Update the room status in the occupancy overview
         const updateOccupancyEvent = new CustomEvent('hotelOccupancyUpdate', {
-          detail: { 
-            roomId: reservation.room_id, 
+          detail: {
+            roomId: reservation.room_id,
             status: 'Occupied',
             guestName: reservation.guest_name,
             forceRefresh: true  // Add a flag to force refresh
           }
         });
         document.dispatchEvent(updateOccupancyEvent);
-        
+
         alert('Guest checked in successfully and moved to Guest Directory!');
       } catch (error) {
         console.error('Error during check-in process:', error);
@@ -284,7 +291,7 @@ const ReservationsList = () => {
       try {
         // Call the checkOutGuest function from context
         const result = await checkOutGuest(reservation.room_id);
-        
+
         if (result.success) {
           alert('Guest checked out successfully');
         } else {
@@ -307,11 +314,11 @@ const ReservationsList = () => {
       } else {
         date = dateString;
       }
-      
+
       if (isNaN(date.getTime())) {
         return 'Invalid date';
       }
-      
+
       return format(date, 'MMM d, yyyy');
     } catch (error) {
       console.error('Error formatting date:', error, dateString);
@@ -321,10 +328,10 @@ const ReservationsList = () => {
 
   const getStatusBadgeClass = (status) => {
     if (!status) return 'bg-gray-500';
-    
+
     const baseClasses = 'status-badge';
-    
-    switch(status.toLowerCase()) {
+
+    switch (status.toLowerCase()) {
       case 'confirmed':
         return `${baseClasses} confirmed`;
       case 'reserved':
@@ -344,10 +351,10 @@ const ReservationsList = () => {
 
   const getPaymentStatusBadgeClass = (status) => {
     if (!status) return 'bg-gray-500';
-    
+
     const baseClasses = 'payment-badge';
-    
-    switch(status.toLowerCase()) {
+
+    switch (status.toLowerCase()) {
       case 'paid':
         return `${baseClasses} paid`;
       case 'pending':
@@ -365,46 +372,46 @@ const ReservationsList = () => {
   const RoomAvailabilityModal = ({ isOpen, onClose, rooms, isDarkMode }) => {
     const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
     const [roomTypeFilter, setRoomTypeFilter] = useState('all');
-    
+
     // Only show available rooms
-    const availableRooms = rooms.filter(room => 
-      room.status === 'Available' && 
+    const availableRooms = rooms.filter(room =>
+      room.status === 'Available' &&
       (roomTypeFilter === 'all' || room.type === roomTypeFilter)
     );
-    
+
     // Get unique room types
     const roomTypes = [...new Set(rooms.map(room => room.type))];
-    
+
     if (!isOpen) return null;
-    
+
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className={`${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'} rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto`}>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold">Room Availability</h2>
-            <button 
+            <button
               onClick={onClose}
               className={`${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-gray-800'} text-xl font-bold`}
             >
               ×
             </button>
           </div>
-          
+
           {/* Filters */}
           <div className="flex flex-wrap gap-4 mb-6">
             <div>
               <label className="block text-sm font-medium mb-1">Date</label>
-              <input 
-                type="date" 
+              <input
+                type="date"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
                 className={`rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'} p-2`}
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium mb-1">Room Type</label>
-              <select 
+              <select
                 value={roomTypeFilter}
                 onChange={(e) => setRoomTypeFilter(e.target.value)}
                 className={`rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'} p-2`}
@@ -416,7 +423,7 @@ const ReservationsList = () => {
               </select>
             </div>
           </div>
-          
+
           {/* Room Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {availableRooms.length === 0 ? (
@@ -426,7 +433,7 @@ const ReservationsList = () => {
               </div>
             ) : (
               availableRooms.map(room => (
-                <div 
+                <div
                   key={room.id}
                   className={`border rounded-lg p-4 ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'}`}
                 >
@@ -443,7 +450,7 @@ const ReservationsList = () => {
                     <li>• {room.amenities?.includes('wifi') ? 'Wi-Fi Included' : 'No Wi-Fi'}</li>
                     <li>• {room.amenities?.includes('breakfast') ? 'Breakfast Included' : 'No Breakfast'}</li>
                   </ul>
-                  <button 
+                  <button
                     className={`w-full py-2 rounded ${isDarkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'} text-white`}
                     onClick={() => {
                       // Navigate to room booking
@@ -467,21 +474,21 @@ const ReservationsList = () => {
     const [reason, setReason] = useState('');
     const [isRefund, setIsRefund] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
-    
+
     const cancelledReservations = reservations.filter(res => res.status === 'Cancelled');
-    
+
     const handleSubmit = async (e) => {
       e.preventDefault();
       if (!selectedReservationId) {
         alert('Please select a reservation to cancel');
         return;
       }
-      
+
       setIsProcessing(true);
-      
+
       try {
         const result = await onCancelReservation(selectedReservationId);
-        
+
         if (result.success) {
           alert('Reservation cancelled successfully');
           // Log cancellation details
@@ -500,22 +507,22 @@ const ReservationsList = () => {
         setIsProcessing(false);
       }
     };
-    
+
     if (!isOpen) return null;
-    
+
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className={`${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'} rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto`}>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold">Manage Cancellations</h2>
-            <button 
+            <button
               onClick={onClose}
               className={`${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-gray-800'} text-xl font-bold`}
             >
               ×
             </button>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Left: Cancellation Form */}
             <div>
@@ -523,7 +530,7 @@ const ReservationsList = () => {
               <form onSubmit={handleSubmit}>
                 <div className="mb-4">
                   <label className="block text-sm font-medium mb-1">Select Reservation</label>
-                  <select 
+                  <select
                     value={selectedReservationId || ''}
                     onChange={(e) => setSelectedReservationId(e.target.value)}
                     className={`w-full rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'} p-2`}
@@ -540,10 +547,10 @@ const ReservationsList = () => {
                     }
                   </select>
                 </div>
-                
+
                 <div className="mb-4">
                   <label className="block text-sm font-medium mb-1">Reason for Cancellation</label>
-                  <textarea 
+                  <textarea
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                     className={`w-full rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'} p-2`}
@@ -552,7 +559,7 @@ const ReservationsList = () => {
                     required
                   ></textarea>
                 </div>
-                
+
                 <div className="mb-4">
                   <label className="flex items-center">
                     <input
@@ -564,21 +571,20 @@ const ReservationsList = () => {
                     <span>Process Refund</span>
                   </label>
                 </div>
-                
-                <button 
+
+                <button
                   type="submit"
                   disabled={isProcessing}
-                  className={`w-full py-2 rounded ${
-                    isDarkMode 
-                      ? 'bg-red-600 hover:bg-red-700 disabled:bg-red-800' 
-                      : 'bg-red-500 hover:bg-red-600 disabled:bg-red-300'
-                  } text-white`}
+                  className={`w-full py-2 rounded ${isDarkMode
+                    ? 'bg-red-600 hover:bg-red-700 disabled:bg-red-800'
+                    : 'bg-red-500 hover:bg-red-600 disabled:bg-red-300'
+                    } text-white`}
                 >
                   {isProcessing ? 'Processing...' : 'Cancel Reservation'}
                 </button>
               </form>
             </div>
-            
+
             {/* Right: Recent Cancellations */}
             <div>
               <h3 className="font-medium mb-4">Recent Cancellations</h3>
@@ -589,7 +595,7 @@ const ReservationsList = () => {
               ) : (
                 <div className="space-y-3">
                   {cancelledReservations.slice(0, 5).map(res => (
-                    <div 
+                    <div
                       key={res.id}
                       className={`p-3 rounded ${isDarkMode ? 'bg-gray-700' : 'bg-gray-100'}`}
                     >
@@ -617,7 +623,7 @@ const ReservationsList = () => {
       </div>
     );
   };
-  
+
   // Create GroupBookingModal component
   const GroupBookingModal = ({ isOpen, onClose, isDarkMode, rooms }) => {
     const [groupName, setGroupName] = useState('');
@@ -627,79 +633,79 @@ const ReservationsList = () => {
     const [contactEmail, setContactEmail] = useState('');
     const [contactPhone, setContactPhone] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
-    
+
     // Get unique room types
     const roomTypes = [...new Set(rooms.map(room => room.type))];
-    
+
     // Calculate available rooms for each type
     const availableRoomsByType = roomTypes.reduce((acc, type) => {
       acc[type] = rooms.filter(room => room.status === 'Available' && room.type === type).length;
       return acc;
     }, {});
-    
+
     // Add another room type selection
     const addRoomType = () => {
       // Find a type that hasn't been selected yet, or use the first type
       const unusedTypes = roomTypes.filter(
         type => !selectedRooms.some(room => room.type === type)
       );
-      
+
       const typeToAdd = unusedTypes.length > 0 ? unusedTypes[0] : roomTypes[0];
-      
+
       setSelectedRooms([...selectedRooms, { type: typeToAdd, count: 1 }]);
     };
-    
+
     // Remove a room type selection
     const removeRoomType = (index) => {
       const newRooms = [...selectedRooms];
       newRooms.splice(index, 1);
       setSelectedRooms(newRooms);
     };
-    
+
     // Update a room selection
     const updateRoomSelection = (index, field, value) => {
       const newRooms = [...selectedRooms];
       newRooms[index][field] = value;
       setSelectedRooms(newRooms);
     };
-    
+
     // Calculate total rooms and cost
     const totalRooms = selectedRooms.reduce((total, room) => total + room.count, 0);
     const totalCost = selectedRooms.reduce((total, room) => {
       const roomPrice = rooms.find(r => r.type === room.type)?.price || 100;
       return total + (room.count * roomPrice);
     }, 0) * Math.max(1, Math.floor((new Date(checkOutDate) - new Date(checkInDate)) / (1000 * 60 * 60 * 24)));
-    
+
     // Check if we have any over-booking situations
     const hasOverbooking = selectedRooms.some(
       room => room.count > (availableRoomsByType[room.type] || 0)
     );
-    
+
     const handleSubmit = async (e) => {
       e.preventDefault();
-      
+
       // Check if there are enough rooms available
       if (hasOverbooking) {
         alert('Error: You have selected more rooms than are available for one or more room types.');
         return;
       }
-      
+
       setIsProcessing(true);
-      
+
       try {
         // Get available rooms for each type
         const roomBookings = [];
-        
+
         // For each room type selected, get the available rooms
         for (const roomSelection of selectedRooms) {
           const availableRooms = rooms
             .filter(room => room.status === 'Available' && room.type === roomSelection.type)
             .slice(0, roomSelection.count);
-          
+
           if (availableRooms.length < roomSelection.count) {
             throw new Error(`Not enough ${roomSelection.type} rooms available`);
           }
-          
+
           // Add each room to our bookings
           for (const room of availableRooms) {
             roomBookings.push({
@@ -709,13 +715,13 @@ const ReservationsList = () => {
             });
           }
         }
-        
+
         // Create reservations for each room
         const reservationPromises = roomBookings.map(async (booking, index) => {
           // Create a unique guest name for each room (for tracking purposes)
           const roomNumber = index + 1;
           const guestName = `${groupName} - Room ${roomNumber}`;
-          
+
           // Create the reservation in the database
           const { data, error } = await supabase
             .from('reservations')
@@ -735,31 +741,31 @@ const ReservationsList = () => {
               guest_phone: contactPhone
             })
             .select();
-            
+
           if (error) {
             throw new Error(`Error creating reservation: ${error.message}`);
           }
-          
+
           return data;
         });
-        
+
         // Wait for all reservations to be created
         await Promise.all(reservationPromises);
-        
+
         // Refresh reservation data
         await refreshData();
-        
+
         // Build a summary of the booking
         const roomSummary = selectedRooms
           .map(room => `${room.count} × ${room.type}`)
           .join(', ');
-        
+
         // Show success message
         alert(`Group booking for ${groupName} created successfully!\n${roomSummary} rooms reserved from ${checkInDate} to ${checkOutDate}`);
-        
+
         // Close the modal
         onClose();
-        
+
       } catch (error) {
         console.error('Error creating group booking:', error);
         alert(`Error creating group booking: ${error.message}`);
@@ -767,31 +773,31 @@ const ReservationsList = () => {
         setIsProcessing(false);
       }
     };
-    
+
     if (!isOpen) return null;
-    
+
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className={`${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'} rounded-lg p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto`}>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold">Group Booking</h2>
-            <button 
+            <button
               onClick={onClose}
               className={`${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-gray-800'} text-xl font-bold`}
             >
               ×
             </button>
           </div>
-          
+
           <p className="mb-4">Create a group booking for multiple rooms with the same check-in and check-out dates.</p>
-          
+
           <form onSubmit={handleSubmit}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
                 <label htmlFor="groupName" className="block text-sm font-medium mb-1">Group/Company Name</label>
-                <input 
+                <input
                   id="groupName"
-                  type="text" 
+                  type="text"
                   value={groupName}
                   onChange={(e) => setGroupName(e.target.value)}
                   className={`w-full rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'} p-2`}
@@ -799,49 +805,49 @@ const ReservationsList = () => {
                   placeholder="Enter group or company name"
                 />
               </div>
-              
+
               <div>
                 <label htmlFor="contactEmail" className="block text-sm font-medium mb-1">Contact Email</label>
-                <input 
+                <input
                   id="contactEmail"
-                  type="email" 
+                  type="email"
                   value={contactEmail}
                   onChange={(e) => setContactEmail(e.target.value)}
                   className={`w-full rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'} p-2`}
                   placeholder="Contact email for the group"
                 />
               </div>
-              
+
               <div>
                 <label htmlFor="contactPhone" className="block text-sm font-medium mb-1">Contact Phone</label>
-                <input 
+                <input
                   id="contactPhone"
-                  type="tel" 
+                  type="tel"
                   value={contactPhone}
                   onChange={(e) => setContactPhone(e.target.value)}
                   className={`w-full rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'} p-2`}
                   placeholder="Contact phone for the group"
                 />
               </div>
-              
+
               <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="checkInDate" className="block text-sm font-medium mb-1">Check-In Date</label>
-                  <input 
+                  <input
                     id="checkInDate"
-                    type="date" 
+                    type="date"
                     value={checkInDate}
                     onChange={(e) => setCheckInDate(e.target.value)}
                     className={`w-full rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'} p-2`}
                     required
                   />
                 </div>
-                
+
                 <div>
                   <label htmlFor="checkOutDate" className="block text-sm font-medium mb-1">Check-Out Date</label>
-                  <input 
+                  <input
                     id="checkOutDate"
-                    type="date" 
+                    type="date"
                     value={checkOutDate}
                     min={checkInDate}
                     onChange={(e) => setCheckOutDate(e.target.value)}
@@ -851,32 +857,31 @@ const ReservationsList = () => {
                 </div>
               </div>
             </div>
-            
+
             <div className="mb-4">
               <div className="flex justify-between items-center mb-2">
                 <h3 className="font-medium">Room Selection</h3>
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={addRoomType}
                   disabled={selectedRooms.length >= roomTypes.length}
-                  className={`px-2 py-1 rounded text-sm ${
-                    selectedRooms.length >= roomTypes.length
-                      ? isDarkMode ? 'bg-gray-700 text-gray-500' : 'bg-gray-200 text-gray-400'
-                      : isDarkMode ? 'bg-blue-700 hover:bg-blue-600' : 'bg-blue-100 hover:bg-blue-200 text-blue-800'
-                  }`}
+                  className={`px-2 py-1 rounded text-sm ${selectedRooms.length >= roomTypes.length
+                    ? isDarkMode ? 'bg-gray-700 text-gray-500' : 'bg-gray-200 text-gray-400'
+                    : isDarkMode ? 'bg-blue-700 hover:bg-blue-600' : 'bg-blue-100 hover:bg-blue-200 text-blue-800'
+                    }`}
                 >
                   <i className="fas fa-plus mr-1"></i> Add Room Type
                 </button>
               </div>
-              
+
               {selectedRooms.map((roomSelection, index) => (
-                <div 
-                  key={index} 
+                <div
+                  key={index}
                   className={`p-3 rounded-lg mb-2 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-100'} flex flex-wrap items-center gap-3`}
                 >
                   <div className="flex-1 min-w-[200px]">
                     <label className="block text-sm font-medium mb-1">Room Type</label>
-                    <select 
+                    <select
                       value={roomSelection.type}
                       onChange={(e) => updateRoomSelection(index, 'type', e.target.value)}
                       className={`w-full rounded border ${isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} p-2`}
@@ -886,31 +891,30 @@ const ReservationsList = () => {
                       ))}
                     </select>
                   </div>
-                  
+
                   <div className="flex-1 min-w-[150px]">
                     <label className="block text-sm font-medium mb-1">Number of Rooms</label>
                     <div className="flex items-center">
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         min="1"
                         value={roomSelection.count}
                         onChange={(e) => updateRoomSelection(index, 'count', parseInt(e.target.value))}
                         className={`w-full rounded-l border-y border-l ${isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} p-2`}
                       />
                       <div className={`inline-flex border-y border-r rounded-r px-3 items-center ${isDarkMode ? 'bg-gray-600 border-gray-600' : 'bg-gray-50 border-gray-300'}`}>
-                        <span className={`text-xs ${
-                          roomSelection.count > (availableRoomsByType[roomSelection.type] || 0)
+                        <span className={`text-xs ${roomSelection.count > (availableRoomsByType[roomSelection.type] || 0)
                           ? 'text-red-500 font-bold'
                           : isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                        }`}>
+                          }`}>
                           {availableRoomsByType[roomSelection.type] || 0} available
                         </span>
                       </div>
                     </div>
                   </div>
-                  
+
                   {selectedRooms.length > 1 && (
-                    <button 
+                    <button
                       type="button"
                       onClick={() => removeRoomType(index)}
                       className={`p-2 rounded-full ${isDarkMode ? 'text-red-300 hover:bg-red-900' : 'text-red-500 hover:bg-red-100'}`}
@@ -922,16 +926,16 @@ const ReservationsList = () => {
                 </div>
               ))}
             </div>
-            
+
             <div className={`p-4 rounded mb-4 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
               <h3 className="font-medium mb-2">Summary</h3>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>Group Name:</div>
                 <div className="font-medium">{groupName || '-'}</div>
-                
+
                 <div>Dates:</div>
                 <div className="font-medium">{checkInDate} to {checkOutDate}</div>
-                
+
                 <div>Rooms:</div>
                 <div className="font-medium">
                   {selectedRooms.map((room, i) => (
@@ -941,13 +945,13 @@ const ReservationsList = () => {
                   ))}
                   <div className="mt-1 border-t pt-1">Total: {totalRooms} rooms</div>
                 </div>
-                
+
                 <div>Est. Total:</div>
                 <div className="font-medium">
                   GH₵{totalCost.toFixed(2)}
                 </div>
               </div>
-              
+
               {hasOverbooking && (
                 <div className="mt-3 text-red-500 text-sm border-t border-red-400 pt-2">
                   <i className="fas fa-exclamation-triangle mr-1"></i>
@@ -955,23 +959,22 @@ const ReservationsList = () => {
                 </div>
               )}
             </div>
-            
+
             <div className="flex justify-end">
-              <button 
+              <button
                 type="button"
                 onClick={onClose}
                 className={`mr-2 px-4 py-2 rounded ${isDarkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'}`}
               >
                 Cancel
               </button>
-              <button 
+              <button
                 type="submit"
                 disabled={hasOverbooking || isProcessing}
-                className={`px-4 py-2 rounded ${
-                  hasOverbooking || isProcessing
-                    ? isDarkMode ? 'bg-green-900 opacity-50' : 'bg-green-300 opacity-50'
-                    : isDarkMode ? 'bg-green-600 hover:bg-green-700' : 'bg-green-500 hover:bg-green-600'
-                } text-white flex items-center justify-center`}
+                className={`px-4 py-2 rounded ${hasOverbooking || isProcessing
+                  ? isDarkMode ? 'bg-green-900 opacity-50' : 'bg-green-300 opacity-50'
+                  : isDarkMode ? 'bg-green-600 hover:bg-green-700' : 'bg-green-500 hover:bg-green-600'
+                  } text-white flex items-center justify-center`}
               >
                 {isProcessing ? (
                   <>
@@ -996,26 +999,26 @@ const ReservationsList = () => {
   const handleViewReservation = (reservation) => {
     setSelectedReservation(reservation);
     setShowViewModal(true);
-    
+
     // Log activity
     console.log(`Viewing reservation details for ${reservation.guestName}, Room: ${reservation.roomNumber}`);
   };
-  
+
   // Handle edit reservation
   const handleEditReservation = (reservation) => {
     setSelectedReservation(reservation);
     setShowEditModal(true);
-    
+
     // Log activity
     console.log(`Editing reservation for ${reservation.guestName}, Room: ${reservation.roomNumber}`);
   };
-  
+
   // Handle update reservation
   const handleUpdateReservation = async (updatedReservation) => {
     try {
       // Call the context method to update reservation
       const result = await updateReservation(updatedReservation);
-      
+
       if (result.success) {
         // Refresh the reservations list
         refreshData();
@@ -1036,13 +1039,13 @@ const ReservationsList = () => {
         ${type === 'success' ? 'bg-green-600' : 'bg-red-600'} text-white`}>
         <div className="flex items-center">
           <span className="mr-2">
-            {type === 'success' ? 
-              <i className="fas fa-check-circle"></i> : 
+            {type === 'success' ?
+              <i className="fas fa-check-circle"></i> :
               <i className="fas fa-exclamation-circle"></i>}
           </span>
           <p>{message}</p>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="ml-4 text-white focus:outline-none"
           >
             <i className="fas fa-times"></i>
@@ -1058,7 +1061,7 @@ const ReservationsList = () => {
       const timer = setTimeout(() => {
         setToastMessage(null);
       }, 5000);
-      
+
       return () => clearTimeout(timer);
     }
   }, [toastMessage]);
@@ -1079,7 +1082,7 @@ const ReservationsList = () => {
           <i className="fas fa-exclamation-triangle error-icon"></i>
           <h3>Error Loading Reservations</h3>
           <p>{error}</p>
-          <button 
+          <button
             className="retry-button"
             onClick={refreshData}
           >
@@ -1105,7 +1108,7 @@ const ReservationsList = () => {
               className="search-input"
             />
             {searchTerm && (
-              <button 
+              <button
                 onClick={() => setSearchTerm('')}
                 className="clear-search"
               >
@@ -1114,50 +1117,50 @@ const ReservationsList = () => {
             )}
           </div>
         </div>
-        
+
         <div className="filter-options">
           <div className="status-filter">
-            <button 
+            <button
               className={`filter-btn ${statusFilter === 'active' ? 'active' : ''}`}
               onClick={() => setStatusFilter('active')}
             >
               <i className="fas fa-clock"></i>
               <span>Active</span>
             </button>
-            
-            <button 
+
+            <button
               className={`filter-btn ${statusFilter === 'Confirmed' ? 'active' : ''}`}
               onClick={() => setStatusFilter('Confirmed')}
             >
               <i className="fas fa-check-circle"></i>
               <span>Confirmed</span>
             </button>
-            
-            <button 
+
+            <button
               className={`filter-btn ${statusFilter === 'Reserved' ? 'active' : ''}`}
               onClick={() => setStatusFilter('Reserved')}
             >
               <i className="fas fa-calendar-check"></i>
-              <span>Reserved</span>  
+              <span>Reserved</span>
             </button>
-            
-            <button 
+
+            <button
               className={`filter-btn ${statusFilter === 'Checked In' ? 'active' : ''}`}
               onClick={() => setStatusFilter('Checked In')}
             >
               <i className="fas fa-door-open"></i>
               <span>Checked In</span>
             </button>
-            
-            <button 
+
+            <button
               className={`filter-btn ${statusFilter === 'Cancelled' ? 'active' : ''}`}
               onClick={() => setStatusFilter('Cancelled')}
             >
               <i className="fas fa-ban"></i>
               <span>Cancelled</span>
             </button>
-            
-            <button 
+
+            <button
               className={`filter-btn ${statusFilter === 'all' ? 'active' : ''}`}
               onClick={() => setStatusFilter('all')}
             >
@@ -1165,9 +1168,9 @@ const ReservationsList = () => {
               <span>All</span>
             </button>
           </div>
-          
+
           <div className="advanced-actions">
-            <button 
+            <button
               className="action-btn"
               onClick={() => refreshData()}
             >
@@ -1177,7 +1180,7 @@ const ReservationsList = () => {
           </div>
         </div>
       </div>
-      
+
       {/* Empty State */}
       {!loading && filteredReservations.length === 0 && (
         <div className="empty-reservations">
@@ -1185,15 +1188,15 @@ const ReservationsList = () => {
             <i className="fas fa-calendar-times empty-icon"></i>
             <h3>No Reservations Found</h3>
             <p>
-              {searchTerm 
+              {searchTerm
                 ? `No reservations match "${searchTerm}"`
-                : statusFilter === 'all' 
+                : statusFilter === 'all'
                   ? "There are no reservations in the system"
                   : `No ${statusFilter.toLowerCase()} reservations found`
               }
             </p>
             {(searchTerm || statusFilter !== 'all') && (
-              <button 
+              <button
                 className="clear-filters-btn"
                 onClick={() => {
                   setSearchTerm('');
@@ -1207,143 +1210,264 @@ const ReservationsList = () => {
           </div>
         </div>
       )}
-      
-      {/* Reservations Cards */}
+
+      {/* Reservations Table */}
       {!loading && filteredReservations.length > 0 && (
-        <div className="reservations-grid">
-          {filteredReservations.map((reservation) => (
-            <div 
-              key={reservation.id} 
-              className={`reservation-card ${animatedItems[reservation.id] ? 'animated' : ''}`}
-              onClick={() => handleViewReservation(reservation)}
-            >
-              <div className="card-status-indicator" data-status={reservation.status?.toLowerCase()}></div>
-              
-              <div className="card-header">
-                <div className="guest-info">
-                  <h3 className="guest-name">{reservation.guest_name}</h3>
-                  <div className="reservation-id">#{reservation.id}</div>
-                </div>
-                
-                <div className={getStatusBadgeClass(reservation.status)}>
-                  {reservation.status}
-                </div>
-              </div>
-              
-              <div className="card-body">
-                <div className="info-row">
-                  <div className="info-label">
-                    <i className="fas fa-bed"></i>
-                    Room
-                  </div>
-                  <div className="info-value">
-                    <span className="room-number">{reservation.room_name || `Room ${reservation.room_number}`}</span>
-                    <span className="room-type">{reservation.room_type}</span>
-                  </div>
-                </div>
-                
-                <div className="info-row">
-                  <div className="info-label">
-                    <i className="fas fa-calendar-alt"></i>
-                    Dates
-                  </div>
-                  <div className="info-value dates">
-                    <div className="check-in">
-                      <span className="date-label">Check-in</span>
-                      <span className="date-value">{formatDate(reservation.check_in_date)}</span>
+        <div className="overflow-x-auto" style={{ background: isDarkMode ? '#1f2937' : 'white', borderRadius: '0.5rem', padding: '1rem' }}>
+          <table className="min-w-full">
+            <thead>
+              <tr style={{ borderBottom: isDarkMode ? '1px solid rgba(75, 85, 99, 0.5)' : '1px solid rgba(229, 231, 235, 0.7)' }}>
+                <th style={{ padding: '0.75rem 1.5rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '500', color: isDarkMode ? '#d1d5db' : '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Guest Name
+                </th>
+                <th style={{ padding: '0.75rem 1.5rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '500', color: isDarkMode ? '#d1d5db' : '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Room
+                </th>
+                <th style={{ padding: '0.75rem 1.5rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '500', color: isDarkMode ? '#d1d5db' : '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Check In
+                </th>
+                <th style={{ padding: '0.75rem 1.5rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '500', color: isDarkMode ? '#d1d5db' : '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Check Out
+                </th>
+                <th style={{ padding: '0.75rem 1.5rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '500', color: isDarkMode ? '#d1d5db' : '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Status
+                </th>
+                <th style={{ padding: '0.75rem 1.5rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '500', color: isDarkMode ? '#d1d5db' : '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Payment
+                </th>
+                <th style={{ padding: '0.75rem 1.5rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '500', color: isDarkMode ? '#d1d5db' : '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredReservations.map((reservation) => (
+                <tr
+                  key={reservation.id}
+                  style={{
+                    borderBottom: '1px solid rgba(229, 231, 235, 0.1)',
+                    transition: 'background-color 0.15s',
+                    cursor: 'pointer'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = isDarkMode ? 'rgba(55, 65, 81, 0.5)' : 'rgba(249, 250, 251, 1)'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  onClick={() => handleViewReservation(reservation)}
+                >
+                  <td style={{ padding: '1rem 1.5rem', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <div style={{
+                        height: '2.5rem',
+                        width: '2.5rem',
+                        borderRadius: '9999px',
+                        background: reservation.status === 'Checked In' ? 'linear-gradient(to bottom right, #3b82f6, #4f46e5)' :
+                          reservation.status === 'Checked Out' ? 'linear-gradient(to bottom right, #6b7280, #6b7280)' :
+                            reservation.status === 'Reserved' ? 'linear-gradient(to bottom right, #f59e0b, #eab308)' :
+                              'linear-gradient(to bottom right, #a855f7, #ec4899)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'white',
+                        fontWeight: '500',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      }}>
+                        {reservation.guest_name.split(' ').map(n => n[0]).join('')}
+                      </div>
+                      <div style={{ marginLeft: '1rem' }}>
+                        <div style={{ fontSize: '0.875rem', fontWeight: '500', color: isDarkMode ? 'white' : '#1f2937' }}>
+                          {reservation.guest_name}
+                        </div>
+                        {reservation.guest_email && (
+                          <div style={{ fontSize: '0.75rem', color: isDarkMode ? '#9ca3af' : '#6b7280' }}>
+                            {reservation.guest_email}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="divider"></div>
-                    <div className="check-out">
-                      <span className="date-label">Check-out</span>
-                      <span className="date-value">{formatDate(reservation.check_out_date)}</span>
+                  </td>
+                  <td style={{ padding: '1rem 1.5rem', whiteSpace: 'nowrap', fontSize: '0.875rem', color: isDarkMode ? '#d1d5db' : '#4b5563' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '0.125rem 0.5rem',
+                        background: isDarkMode ? 'rgba(59, 130, 246, 0.3)' : 'rgba(219, 234, 254, 1)',
+                        color: isDarkMode ? '#93c5fd' : '#1e40af',
+                        borderRadius: '9999px',
+                        fontSize: '0.75rem',
+                        fontWeight: '600',
+                        border: isDarkMode ? '1px solid rgba(29, 78, 216, 0.5)' : '1px solid rgba(191, 219, 254, 1)',
+                        width: 'fit-content'
+                      }}>
+                        {reservation.room_name || `Room ${reservation.room_number}`}
+                      </span>
+                      <span style={{ fontSize: '0.75rem', color: isDarkMode ? '#9ca3af' : '#6b7280' }}>
+                        {reservation.room_type}
+                      </span>
                     </div>
-                  </div>
-                </div>
-                
-                <div className="info-row">
-                  <div className="info-label">
-                    <i className="fas fa-credit-card"></i>
-                    Payment
-                  </div>
-                  <div className="info-value payment">
-                    <span className={getPaymentStatusBadgeClass(reservation.payment_status)}>
-                      {reservation.payment_status}
+                  </td>
+                  <td style={{ padding: '1rem 1.5rem', whiteSpace: 'nowrap', fontSize: '0.875rem', color: isDarkMode ? '#d1d5db' : '#4b5563' }}>
+                    {formatDate(reservation.check_in_date)}
+                  </td>
+                  <td style={{ padding: '1rem 1.5rem', whiteSpace: 'nowrap', fontSize: '0.875rem', color: isDarkMode ? '#d1d5db' : '#4b5563' }}>
+                    {formatDate(reservation.check_out_date)}
+                  </td>
+                  <td style={{ padding: '1rem 1.5rem', whiteSpace: 'nowrap' }}>
+                    <span style={{
+                      padding: '0.125rem 0.5rem',
+                      fontSize: '0.75rem',
+                      borderRadius: '9999px',
+                      border: '1px solid',
+                      fontWeight: '600',
+                      ...(reservation.status === 'Checked In'
+                        ? { background: isDarkMode ? 'rgba(5, 150, 105, 0.3)' : 'rgba(209, 250, 229, 1)', color: isDarkMode ? '#6ee7b7' : '#065f46', borderColor: isDarkMode ? 'rgba(5, 150, 105, 0.5)' : 'rgba(167, 243, 208, 1)' }
+                        : reservation.status === 'Checked Out'
+                          ? { background: isDarkMode ? 'rgba(220, 38, 38, 0.3)' : 'rgba(254, 226, 226, 1)', color: isDarkMode ? '#fca5a5' : '#991b1b', borderColor: isDarkMode ? 'rgba(220, 38, 38, 0.5)' : 'rgba(252, 165, 165, 1)' }
+                          : reservation.status === 'Reserved' || reservation.status === 'Confirmed'
+                            ? { background: isDarkMode ? 'rgba(217, 119, 6, 0.3)' : 'rgba(254, 243, 199, 1)', color: isDarkMode ? '#fcd34d' : '#92400e', borderColor: isDarkMode ? 'rgba(217, 119, 6, 0.5)' : 'rgba(253, 224, 71, 1)' }
+                            : { background: isDarkMode ? 'rgba(107, 114, 128, 0.3)' : 'rgba(243, 244, 246, 1)', color: isDarkMode ? '#d1d5db' : '#374151', borderColor: isDarkMode ? 'rgba(107, 114, 128, 0.5)' : 'rgba(209, 213, 219, 1)' })
+                    }}>
+                      {reservation.status}
                     </span>
-                    <span className="payment-method">{reservation.payment_method}</span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="card-actions">
-                {reservation.status === 'Reserved' || reservation.status === 'Confirmed' ? (
-                  <button 
-                    className="action-button check-in"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleCheckIn(reservation);
-                    }}
-                  >
-                    <i className="fas fa-check-circle"></i>
-                    Check In
-                  </button>
-                ) : null}
-                
-                <button 
-                  className="action-button edit"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleEditReservation(reservation);
-                  }}
-                >
-                  <i className="fas fa-edit"></i>
-                  Edit
-                </button>
-                
-                <button 
-                  className="action-button cancel"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCancelReservation(reservation.id);
-                  }}
-                >
-                  <i className="fas fa-times-circle"></i>
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ))}
+                  </td>
+                  <td style={{ padding: '1rem 1.5rem', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                      <span style={{
+                        padding: '0.125rem 0.5rem',
+                        fontSize: '0.75rem',
+                        borderRadius: '9999px',
+                        border: '1px solid',
+                        fontWeight: '600',
+                        width: 'fit-content',
+                        ...(reservation.payment_status === 'Paid'
+                          ? { background: isDarkMode ? 'rgba(5, 150, 105, 0.3)' : 'rgba(209, 250, 229, 1)', color: isDarkMode ? '#6ee7b7' : '#065f46', borderColor: isDarkMode ? 'rgba(5, 150, 105, 0.5)' : 'rgba(167, 243, 208, 1)' }
+                          : { background: isDarkMode ? 'rgba(217, 119, 6, 0.3)' : 'rgba(254, 243, 199, 1)', color: isDarkMode ? '#fcd34d' : '#92400e', borderColor: isDarkMode ? 'rgba(217, 119, 6, 0.5)' : 'rgba(253, 224, 71, 1)' })
+                      }}>
+                        {reservation.payment_status}
+                      </span>
+                      <span style={{ fontSize: '0.75rem', color: isDarkMode ? '#9ca3af' : '#6b7280' }}>
+                        {reservation.payment_method}
+                      </span>
+                    </div>
+                  </td>
+                  <td style={{ padding: '1rem 1.5rem', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      {(reservation.status === 'Reserved' || reservation.status === 'Confirmed') && (
+                        <button
+                          style={{
+                            padding: '0.375rem',
+                            borderRadius: '9999px',
+                            background: isDarkMode ? 'rgba(5, 150, 105, 0.3)' : 'rgba(209, 250, 229, 0.8)',
+                            color: isDarkMode ? '#6ee7b7' : '#059669',
+                            transition: 'all 0.2s',
+                            border: 'none',
+                            cursor: 'pointer'
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCheckIn(reservation);
+                          }}
+                          title="Check In"
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = isDarkMode ? 'rgba(5, 150, 105, 0.5)' : 'rgba(167, 243, 208, 0.7)';
+                            e.currentTarget.style.color = isDarkMode ? '#a7f3d0' : '#047857';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = isDarkMode ? 'rgba(5, 150, 105, 0.3)' : 'rgba(209, 250, 229, 0.8)';
+                            e.currentTarget.style.color = isDarkMode ? '#6ee7b7' : '#059669';
+                          }}
+                        >
+                          <i className="fas fa-sign-in-alt" style={{ fontSize: '0.875rem' }}></i>
+                        </button>
+                      )}
+                      <button
+                        style={{
+                          padding: '0.375rem',
+                          borderRadius: '9999px',
+                          background: isDarkMode ? 'rgba(59, 130, 246, 0.3)' : 'rgba(219, 234, 254, 0.8)',
+                          color: isDarkMode ? '#93c5fd' : '#2563eb',
+                          transition: 'all 0.2s',
+                          border: 'none',
+                          cursor: 'pointer'
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditReservation(reservation);
+                        }}
+                        title="Edit"
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = isDarkMode ? 'rgba(59, 130, 246, 0.5)' : 'rgba(191, 219, 254, 0.7)';
+                          e.currentTarget.style.color = isDarkMode ? '#bfdbfe' : '#1e40af';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = isDarkMode ? 'rgba(59, 130, 246, 0.3)' : 'rgba(219, 234, 254, 0.8)';
+                          e.currentTarget.style.color = isDarkMode ? '#93c5fd' : '#2563eb';
+                        }}
+                      >
+                        <i className="fas fa-edit" style={{ fontSize: '0.875rem' }}></i>
+                      </button>
+                      <button
+                        style={{
+                          padding: '0.375rem',
+                          borderRadius: '9999px',
+                          background: isDarkMode ? 'rgba(220, 38, 38, 0.3)' : 'rgba(254, 226, 226, 0.8)',
+                          color: isDarkMode ? '#fca5a5' : '#dc2626',
+                          transition: 'all 0.2s',
+                          border: 'none',
+                          cursor: 'pointer'
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCancelReservation(reservation.id);
+                        }}
+                        title="Cancel"
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = isDarkMode ? 'rgba(220, 38, 38, 0.5)' : 'rgba(252, 165, 165, 0.7)';
+                          e.currentTarget.style.color = isDarkMode ? '#fee2e2' : '#991b1b';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = isDarkMode ? 'rgba(220, 38, 38, 0.3)' : 'rgba(254, 226, 226, 0.8)';
+                          e.currentTarget.style.color = isDarkMode ? '#fca5a5' : '#dc2626';
+                        }}
+                      >
+                        <i className="fas fa-times" style={{ fontSize: '0.875rem' }}></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
-      
+
       {/* Modals */}
-      <RoomAvailabilityModal 
+      <RoomAvailabilityModal
         isOpen={showRoomAvailabilityModal}
         onClose={() => setShowRoomAvailabilityModal(false)}
         rooms={rooms}
         isDarkMode={isDarkMode}
       />
-      
-      <CancellationModal 
+
+      <CancellationModal
         isOpen={showCancellationModal}
         onClose={() => setShowCancellationModal(false)}
         reservations={reservations}
         onCancelReservation={handleCancelReservation}
         isDarkMode={isDarkMode}
       />
-      
-      <GroupBookingModal 
+
+      <GroupBookingModal
         isOpen={showGroupBookingModal}
         onClose={() => setShowGroupBookingModal(false)}
         rooms={rooms}
         isDarkMode={isDarkMode}
       />
-      
+
       <ReservationViewModal
         isOpen={showViewModal}
         onClose={() => setShowViewModal(false)}
         reservation={selectedReservation}
       />
-      
+
       <ReservationEditModal
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
@@ -1351,7 +1475,7 @@ const ReservationsList = () => {
         onUpdate={handleUpdateReservation}
         rooms={rooms}
       />
-      
+
       {/* Toast Message */}
       {toastMessage && (
         <Toast

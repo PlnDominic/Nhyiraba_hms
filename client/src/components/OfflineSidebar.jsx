@@ -107,10 +107,17 @@ const OfflineSidebar = ({ activeLink }) => {
             </button>
             {sidebarOpen && (
               <h2 className="sidebar-title">
+                <div className="title-with-logo">
+                  <img 
+                    src="/logo.jpg" 
+                    alt="Nhyiraba Hotel Logo" 
+                    className="hotel-logo"
+                  />
                 <span className="title-glow">
                   <FontAwesomeIcon icon={faPlugCircleXmark} className="mr-2 text-green-500" />
-                  Lavimac Royal
+                  Nhyiraba Hotel
                 </span>
+                </div>
                 <span className="text-xs text-green-400 block mt-1">Offline Mode</span>
               </h2>
             )}

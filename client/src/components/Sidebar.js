@@ -1,19 +1,19 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { 
-  faHome, 
-  faCalendar, 
-  faBed, 
-  faUsers, 
-  faUser, 
-  faCog, 
-  faSignOutAlt, 
-  faBars, 
-  faTimes, 
-  faBell, 
-  faBellSlash, 
-  faDoorOpen, 
+import {
+  faHome,
+  faCalendar,
+  faBed,
+  faUsers,
+  faUser,
+  faCog,
+  faSignOutAlt,
+  faBars,
+  faTimes,
+  faBell,
+  faBellSlash,
+  faDoorOpen,
   faDoorClosed,
   faUtensils,
   faClipboardList,
@@ -23,7 +23,11 @@ import {
   faUserShield,
   faWrench,
   faSun,
-  faMoon
+  faMoon,
+  faSwimmingPool,
+  faShoppingCart,
+  faMoneyBillWave,
+  faClock
 } from '@fortawesome/free-solid-svg-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useUser } from '../context/UserContext';
@@ -31,14 +35,15 @@ import { useRoomReservation } from '../context/RoomReservationContext';
 import usePermission from '../hooks/usePermission';
 import '../styles/Sidebar.css';
 
-const Sidebar = ({ activeLink }) => {
+const Sidebar = ({ activeLink, isOpen, toggleSidebar }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
   const { user, logoutUser } = useUser();
   const { isShiftActive, endShift } = useRoomReservation();
   const { hasDepartmentAccess } = usePermission();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // const [sidebarOpen, setSidebarOpen] = useState(true); // Removed local state
+  const sidebarOpen = isOpen; // Use prop instead
   const [routeCache, setRouteCache] = useState({});
 
   const currentUser = user;
@@ -54,18 +59,22 @@ const Sidebar = ({ activeLink }) => {
     { name: 'Rooms', path: '/rooms', icon: faBed },
     { name: 'Guests', path: '/guests', icon: faUsers },
     { name: 'Staff', path: '/staff', icon: faUser, show: isAdmin || isManager },
+    { name: 'Time & Attendance', path: '/time-attendance', icon: faClock },
     { name: 'Tasks', path: '/tasks', icon: faClipboardList },
     { name: 'Billing', path: '/billing', icon: faFileInvoiceDollar },
+    { name: 'Revenue', path: '/revenue', icon: faMoneyBillWave, show: isAdmin || isManager },
     { name: 'Services', path: '/services', icon: faWrench },
-    { 
-      name: 'Inventory', 
-      path: '/inventory', 
-      icon: faBox, 
-      show: isAdmin || isManager || 
-            currentUser?.department === 'Housekeeping' || 
-            currentUser?.department === 'Food & Beverage' 
+    {
+      name: 'Inventory',
+      path: '/inventory',
+      icon: faBox,
+      show: isAdmin || isManager ||
+        currentUser?.department === 'Housekeeping' ||
+        currentUser?.department === 'Food & Beverage'
     },
-    { name: 'Restaurant', path: '/restaurant', icon: faUtensils },
+    { name: 'Bar', path: '/restaurant', icon: faUtensils },
+    { name: 'Supermarket', path: '/supermarket', icon: faShoppingCart },
+    { name: 'Pool', path: '/pool', icon: faSwimmingPool },
     { name: 'Reports', path: '/reports', icon: faChartBar, show: isAdmin || isManager },
     { name: 'Settings', path: '/settings', icon: faCog },
     { name: 'Access Control', path: '/admin/access-control', icon: faUserShield, show: isAdmin },
@@ -78,12 +87,14 @@ const Sidebar = ({ activeLink }) => {
     return hasDepartmentAccess(link.name);
   });
 
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
+
 
   const handleNavigation = (path) => {
     navigate(path);
+    // Auto-close sidebar on mobile after navigation
+    if (window.innerWidth < 768 && isOpen) {
+      toggleSidebar();
+    }
   };
 
   const handleLogout = () => {
@@ -97,8 +108,8 @@ const Sidebar = ({ activeLink }) => {
       <div className="sidebar-content">
         <div className="sidebar-header">
           <div className="header-content">
-            <button 
-              onClick={toggleSidebar} 
+            <button
+              onClick={toggleSidebar}
               className="toggle-button"
               aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
             >
@@ -108,9 +119,9 @@ const Sidebar = ({ activeLink }) => {
             {sidebarOpen && (
               <h2 className="sidebar-title">
                 <div className="title-with-logo">
-                  <img 
-                    src="/logo.jpg" 
-                    alt="Nhyiraba Hotel Logo" 
+                  <img
+                    src="/logo.jpg"
+                    alt="Nhyiraba Hotel Logo"
                     className="hotel-logo"
                   />
                   <span className="title-glow">Nhyiraba Hotel</span>
@@ -119,14 +130,14 @@ const Sidebar = ({ activeLink }) => {
             )}
           </div>
         </div>
-        
+
         <div className="sidebar-navigation">
           <nav>
             <ul className="nav-links">
               {sidebarLinks.map((link) => (
                 <li key={link.name} className={location.pathname === link.path ? 'active' : ''}>
-                  <a 
-                    href="#" 
+                  <a
+                    href="#"
                     className={`nav-link ${location.pathname === link.path ? 'active' : ''}`}
                     onClick={(e) => {
                       e.preventDefault();
@@ -145,17 +156,17 @@ const Sidebar = ({ activeLink }) => {
             </ul>
           </nav>
         </div>
-        
+
         <div className="sidebar-footer">
-          <button 
-            onClick={toggleTheme} 
+          <button
+            onClick={toggleTheme}
             className="footer-button theme-toggle"
           >
             <div className="button-glow"></div>
             <FontAwesomeIcon icon={theme === 'dark' ? faSun : faMoon} className={sidebarOpen ? 'with-text' : ''} />
             {sidebarOpen && <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>}
           </button>
-          
+
           <button
             onClick={handleLogout}
             className="footer-button logout"

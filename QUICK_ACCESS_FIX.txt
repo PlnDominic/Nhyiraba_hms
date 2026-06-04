@@ -1,0 +1,23 @@
+============================================
+QUICK FIX: Copy & Paste This Into Supabase
+============================================
+
+DROP POLICY IF EXISTS "Anyone can insert access requests" ON access_requests;
+DROP POLICY IF EXISTS "allow_access_request_submission" ON access_requests;
+DROP POLICY IF EXISTS "Admins can view access requests" ON access_requests;
+DROP POLICY IF EXISTS "admins_view_access_requests" ON access_requests;
+DROP POLICY IF EXISTS "Admins can update access requests" ON access_requests;
+
+CREATE POLICY "public_can_insert_requests" 
+ON access_requests FOR INSERT TO public WITH CHECK (true);
+
+CREATE POLICY "public_can_view_own_requests" 
+ON access_requests FOR SELECT TO public USING (true);
+
+CREATE POLICY "admins_can_update_requests" 
+ON access_requests FOR UPDATE TO authenticated
+USING (EXISTS (SELECT 1 FROM user_profiles WHERE user_profiles.user_id = auth.uid() AND user_profiles.role IN ('admin', 'administrator')));
+
+============================================
+Now test: Go to Request Access page and submit!
+============================================

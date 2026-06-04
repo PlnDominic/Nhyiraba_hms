@@ -1,6 +1,6 @@
 # Supabase Keys Setup
 
-This document contains the new Supabase configuration keys for the Lavimac HMS project.
+This document contains the new Supabase configuration keys for the Nhyiraba HMS project.
 
 ## New Supabase Configuration
 

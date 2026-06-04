@@ -3,8 +3,10 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useUser } from '../../context/UserContext';
 import { useStaff } from '../../context/StaffContext';
 import { format, parseISO, differenceInMinutes, startOfWeek, endOfWeek, addDays } from 'date-fns';
-import { FaClock, FaPlay, FaStop, FaFilter, FaCalendarAlt, FaFileExport, FaArrowRight, 
-  FaUserClock, FaListAlt, FaChartBar, FaRegCalendarCheck, FaUsersCog, FaHome, FaSignOutAlt } from 'react-icons/fa';
+import {
+  FaClock, FaPlay, FaStop, FaCalendarAlt, FaFileExport,
+  FaUserClock, FaListAlt, FaChartBar, FaRegCalendarCheck, FaHome, FaSignOutAlt
+} from 'react-icons/fa';
 import ThemeToggle from '../ThemeToggle';
 import { toast } from 'react-hot-toast';
 import * as XLSX from 'xlsx';
@@ -13,8 +15,8 @@ const StaffTimeAttendancePage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logoutUser } = useUser();
-  const { staff, timeEntries, loading, fetchStaff, fetchTimeEntries, recordTimeEntry, updateTimeEntries } = useStaff();
-  
+  const { staff, timeEntries, loading, fetchStaff, fetchTimeEntries, recordTimeEntry, updateTimeEntries, addStaff } = useStaff();
+
   const [clockType, setClockType] = useState('in');
   const [note, setNote] = useState('');
   const [selectedStaff, setSelectedStaff] = useState('');
@@ -28,28 +30,37 @@ const StaffTimeAttendancePage = () => {
   const [lastClockAction, setLastClockAction] = useState(null); // To track the most recent clock action
 
   // Find the staff record that matches the current user
-  const currentStaffMember = staff.find(
-    s => user && (s.email === user.email || `${s.first_name} ${s.last_name}` === user.fullName)
-  );
+  const currentStaffMember = staff.find(s => {
+    if (!user) return false;
+
+    // 1. Check by user_id if it exists on the staff record
+    if (s.user_id && s.user_id === user.id) return true;
+
+    // 2. Check by email (case-insensitive)
+    if (s.email && user.email && s.email.toLowerCase().trim() === user.email.toLowerCase().trim()) return true;
+
+    // 3. Check by name (handling both first/last name and single name field)
+    const staffFullName = s.name || `${s.first_name || ''} ${s.last_name || ''}`.trim();
+    const userFullName = user.fullName || '';
+
+    if (staffFullName && userFullName && staffFullName.toLowerCase().trim() === userFullName.toLowerCase().trim()) return true;
+
+    return false;
+  });
 
   useEffect(() => {
     document.title = 'Time & Attendance | Hotel Management System';
-    
+
     // Fetch staff data
     fetchStaff();
-    
+
     // If current user is staff, pre-select their record
     if (currentStaffMember) {
       setSelectedStaff(currentStaffMember.id);
     }
-    
+
     // Load time entries with initial filters
     loadTimeEntries();
-    
-    // Check if user is admin/manager, redirect if needed
-    if (user && (user.role === 'admin' || user.role === 'manager')) {
-      navigate('/dashboard');
-    }
 
     // Check if we were directed here from the End Shift button
     if (location.state?.clockType === 'out') {
@@ -71,23 +82,60 @@ const StaffTimeAttendancePage = () => {
   }, [filterStaff, dateRange]);
 
   const handleClockInOut = async () => {
-    if (!selectedStaff) {
-      toast.error('Please select a staff member');
+    let staffIdToUse = currentStaffMember ? currentStaffMember.id : null;
+    let staffMemberForDisplay = currentStaffMember;
+
+    // If no staff profile is linked, automatically create one
+    if (!staffIdToUse) {
+      const toastId = toast.loading('Creating staff profile...');
+
+      const newStaffData = {
+        first_name: user.fullName ? user.fullName.split(' ')[0] : 'User',
+        last_name: user.fullName ? user.fullName.split(' ').slice(1).join(' ') : '',
+        email: user.email,
+        position: user.position || 'Staff',
+        department: user.department || 'General',
+        status: 'Active',
+        user_id: user.id, // Link to the user account
+        hire_date: format(new Date(), 'yyyy-MM-dd')
+      };
+
+      try {
+        const result = await addStaff(newStaffData);
+        toast.dismiss(toastId);
+
+        if (result.success && result.data) {
+          staffIdToUse = result.data.id;
+          staffMemberForDisplay = result.data;
+          toast.success('Staff profile created and linked!');
+          // Refresh staff list to include the new member
+          fetchStaff();
+        } else {
+          toast.error('Failed to create staff profile. Please contact admin.');
+          console.error('Staff creation failed:', result.error);
+          return;
+        }
+      } catch (err) {
+        toast.dismiss(toastId);
+        console.error("Auto-creation error:", err);
+        toast.error('An error occurred while creating staff profile.');
+        return;
+      }
+    }
+
+    if (!staffIdToUse) {
+      toast.error('Unable to identify or create staff account.');
       return;
     }
 
-    // Find the selected staff member in the staff directory
-    const staffMember = staff.find(member => member.id === selectedStaff);
-    if (!staffMember) {
-      toast.error('Selected staff member not found in directory');
-      return;
-    }
+    // Find the selected staff member in the staff directory for display purposes
+    const staffMember = staffMemberForDisplay || staff.find(member => member.id === staffIdToUse);
 
     const currentDate = format(new Date(), 'yyyy-MM-dd');
     const currentTime = format(new Date(), 'HH:mm:ss');
-    
+
     const entryData = {
-      staff_id: selectedStaff,
+      staff_id: staffIdToUse,
       entry_type: clockType,
       entry_date: currentDate,
       entry_time: currentTime,
@@ -111,31 +159,31 @@ const StaffTimeAttendancePage = () => {
     const updatedEntries = [...timeEntries, newEntry];
     // Update time entries optimistically
     updateTimeEntries(updatedEntries);
-    
+
     // Store details of the last clock action for highlighting
     setLastClockAction({
-      staffId: selectedStaff,
+      staffId: staffIdToUse,
       date: currentDate,
       time: currentTime,
       type: clockType,
-      staffName: `${staffMember.first_name} ${staffMember.last_name}`
+      staffName: `${staffMember.first_name} ${staffMember.last_name}`.trim() || user.email
     });
-    
+
     // Auto-switch to the other clock type for convenience
     setClockType(clockType === 'in' ? 'out' : 'in');
-    
+
     // Auto-set filter to the current staff member to see their entries
-    setFilterStaff(selectedStaff);
-    
+    setFilterStaff(staffIdToUse);
+
     // Adjust date range to include today if needed
     const today = format(new Date(), 'yyyy-MM-dd');
     if (today < dateRange.startDate || today > dateRange.endDate) {
       setDateRange({
         startDate: today,
-        endDate: format(new Date(new Date().setDate(new Date().getDate() + 7)), 'yyyy-MM-dd')
+        endDate: format(new Date(new Date().getDate() + 7), 'yyyy-MM-dd')
       });
     }
-    
+
     // Reset form
     setNote('');
 
@@ -146,6 +194,19 @@ const StaffTimeAttendancePage = () => {
         toast.error('Failed to record time entry');
         // Reload time entries to revert optimistic update on failure
         loadTimeEntries();
+      } else {
+        // Redirect Supermarket staff to Supermarket page after successful clock in
+        if (clockType === 'in') {
+          const dept = staffMember?.department || user?.department;
+          const isSupermarket = dept && dept.toLowerCase() === 'supermarket';
+
+          if (isSupermarket) {
+            toast.success('Clocked in! Redirecting to Supermarket...');
+            setTimeout(() => {
+              navigate('/supermarket');
+            }, 1000); // Small delay to let them see the success state
+          }
+        }
       }
     } catch (error) {
       console.error('Error recording time entry:', error);
@@ -156,24 +217,37 @@ const StaffTimeAttendancePage = () => {
   };
 
   const goToDashboard = () => {
-    navigate('/dashboard');
+    // Determine the correct dashboard path based on department
+    const department = currentStaffMember?.department || user?.department;
+    const normalizedDept = department ? department.toLowerCase() : '';
+
+    if (normalizedDept === 'supermarket') {
+      navigate('/supermarket');
+    } else if (['food & beverage', 'food beverage', 'restaurant'].includes(normalizedDept)) {
+      navigate('/restaurant');
+    } else if (user?.role === 'admin' || user?.role === 'manager') {
+      navigate('/dashboard');
+    } else {
+      // Default fallback
+      navigate('/dashboard');
+    }
   };
 
   const handleLogout = () => {
     logoutUser();
-    toast.success('Logged out successfully');
+    navigate('/login');
   };
 
   const calculateDuration = (clockIn, clockOut) => {
     if (!clockIn || !clockOut) return 'N/A';
-    
+
     const inTime = parseISO(`${clockIn.entry_date}T${clockIn.entry_time}`);
     const outTime = parseISO(`${clockOut.entry_date}T${clockOut.entry_time}`);
-    
+
     const minutes = differenceInMinutes(outTime, inTime);
     const hours = Math.floor(minutes / 60);
     const remainingMinutes = minutes % 60;
-    
+
     return `${hours}h ${remainingMinutes}m`;
   };
 
@@ -181,14 +255,14 @@ const StaffTimeAttendancePage = () => {
   const groupedEntries = timeEntries.reduce((acc, entry) => {
     const staffId = entry.staff_id;
     const date = entry.entry_date;
-    const key = `${staffId}-${date}`;
-    
+    const key = `${staffId} - ${date}`;
+
     // Find the staff member in the staff directory for accurate data
     const staffMember = staff.find(s => s.id === staffId);
-    const staffName = staffMember 
+    const staffName = staffMember
       ? `${staffMember.first_name} ${staffMember.last_name}`
       : `${entry.staff?.first_name || ''} ${entry.staff?.last_name || ''}`;
-    
+
     if (!acc[key]) {
       acc[key] = {
         staffId,
@@ -197,95 +271,85 @@ const StaffTimeAttendancePage = () => {
         entries: []
       };
     }
-    
+
     acc[key].entries.push(entry);
     return acc;
   }, {});
 
-  // Sort entries by date and type for each staff-date group
-  Object.values(groupedEntries).forEach(group => {
-    group.entries.sort((a, b) => {
-      // First by time
-      const aTime = `${a.entry_date}T${a.entry_time}`;
-      const bTime = `${b.entry_date}T${b.entry_time}`;
-      return aTime.localeCompare(bTime);
-    });
-    
-    // Find clock in and clock out entries
-    group.clockIn = group.entries.find(e => e.entry_type === 'in');
-    group.clockOut = group.entries.find(e => e.entry_type === 'out');
-    
-    // Calculate duration if both clock in and out exist
+  // Process grouped entries to match clock-in and clock-out pairs
+  Object.keys(groupedEntries).forEach(key => {
+    const group = groupedEntries[key];
+    const sortedEntries = group.entries.sort((a, b) =>
+      a.entry_time.localeCompare(b.entry_time)
+    );
+
+    group.clockIn = sortedEntries.find(e => e.entry_type === 'in');
+    group.clockOut = sortedEntries.find(e => e.entry_type === 'out');
+
     if (group.clockIn && group.clockOut) {
       group.duration = calculateDuration(group.clockIn, group.clockOut);
     }
   });
 
-  // For the summary view, ensure staff data comes from staff directory
-  const calculateWeeklySummary = () => {
-    const summary = {};
-    
-    // Initialize summary for each staff member directly from staff directory
-    staff.forEach(member => {
-      summary[member.id] = {
-        id: member.id,
-        name: `${member.first_name} ${member.last_name}`,
-        position: member.position,
+  // Calculate weekly summary for the summary view
+  const weekDays = [];
+  const startOfCurrentWeek = startOfWeek(new Date(), { weekStartsOn: 1 }); // Monday start
+  for (let i = 0; i < 7; i++) {
+    weekDays.push(addDays(startOfCurrentWeek, i));
+  }
+
+  const weeklySummaryObj = Object.values(groupedEntries).reduce((acc, group) => {
+    const staffId = group.staffId;
+    if (!acc[staffId]) {
+      const staffMember = staff.find(s => s.id === staffId);
+      acc[staffId] = {
+        name: group.staffName,
+        position: staffMember?.position || 'Staff',
+        dailyHours: Array(7).fill(0),
         totalMinutes: 0,
-        dailyHours: Array(7).fill(0), // One entry per day of the week
         clockInCount: 0
       };
-    });
-    
-    // Calculate total minutes for each staff member
-    Object.values(groupedEntries).forEach(group => {
-      if (group.clockIn && group.clockOut && summary[group.staffId]) {
-        const inTime = parseISO(`${group.clockIn.entry_date}T${group.clockIn.entry_time}`);
-        const outTime = parseISO(`${group.clockOut.entry_date}T${group.clockOut.entry_time}`);
-        const minutes = differenceInMinutes(outTime, inTime);
-        
-        summary[group.staffId].totalMinutes += minutes;
-        summary[group.staffId].clockInCount++;
-        
-        // Add to daily hours
-        const date = parseISO(group.date);
-        const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
-        summary[group.staffId].dailyHours[dayOfWeek] += minutes / 60;
-      }
-    });
-    
-    return Object.values(summary);
-  };
-
-  const weeklySummary = calculateWeeklySummary();
-
-  // Generate days of the week for the summary view
-  const weekStart = parseISO(dateRange.startDate);
-  const weekDays = [...Array(7)].map((_, i) => addDays(weekStart, i));
-
-  const exportTimesheet = () => {
-    // Check if there are any entries to export
-    if (Object.keys(groupedEntries).length === 0) {
-      toast.error('No time entries to export');
-      return;
     }
 
+    if (group.duration) {
+      const [hours, minutes] = group.duration.replace('h', '').replace('m', '').split(' ').map(Number);
+      const totalMinutes = (hours * 60) + minutes;
+      acc[staffId].totalMinutes += totalMinutes;
+
+      const dayIndex = new Date(group.date).getDay();
+      // Adjust for Monday start (0=Sunday, 1=Monday... to 0=Monday, 6=Sunday)
+      const adjustedIndex = dayIndex === 0 ? 6 : dayIndex - 1;
+      if (adjustedIndex >= 0 && adjustedIndex < 7) {
+        acc[staffId].dailyHours[adjustedIndex] += totalMinutes / 60;
+      }
+    }
+
+    if (group.clockIn) {
+      acc[staffId].clockInCount += 1;
+    }
+
+    return acc;
+  }, {});
+
+  const weeklySummary = Object.values(weeklySummaryObj);
+
+  const exportTimesheet = async () => {
     try {
       // Create worksheet data
       const worksheetData = [];
-      
+
       // Add headers
       worksheetData.push([
-        'Staff Name', 
-        'Position', 
-        'Date', 
-        'Day', 
-        'Clock In', 
-        'Clock Out', 
-        'Duration', 
+        'Staff Name',
+        'Position',
+        'Date',
+        'Day',
+        'Clock In',
+        'Clock Out',
+        'Duration',
         'Notes'
       ]);
-      
+
       // Add data rows
       Object.values(groupedEntries).forEach(group => {
         const staffMemberDetails = staff.find(s => s.id === group.staffId);
@@ -296,7 +360,7 @@ const StaffTimeAttendancePage = () => {
         const clockOutTime = group.clockOut ? group.clockOut.entry_time : 'Not clocked out';
         const duration = group.duration || 'N/A';
         const notes = group.entries.map(e => e.notes).filter(Boolean).join(', ');
-        
+
         worksheetData.push([
           group.staffName,
           staffPosition,
@@ -308,10 +372,10 @@ const StaffTimeAttendancePage = () => {
           notes
         ]);
       });
-      
+
       // Create workbook and worksheet
       const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
-      
+
       // Set column widths
       const columnWidths = [
         { wch: 20 }, // Staff Name
@@ -323,16 +387,16 @@ const StaffTimeAttendancePage = () => {
         { wch: 10 }, // Duration
         { wch: 40 }  // Notes
       ];
-      
+
       worksheet['!cols'] = columnWidths;
-      
+
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Time Entries');
-      
+
       // Generate filename with current date
       const currentDate = format(new Date(), 'yyyy-MM-dd');
       let filename = `Timesheet_${currentDate}`;
-      
+
       // If filtering by a specific staff member, add their name to the filename
       if (filterStaff) {
         const filteredStaffMember = staff.find(s => s.id === filterStaff);
@@ -341,10 +405,10 @@ const StaffTimeAttendancePage = () => {
           filename += `_${staffName}`;
         }
       }
-      
+
       // Export to Excel file
       XLSX.writeFile(workbook, `${filename}.xlsx`);
-      
+
       toast.success('Timesheet exported successfully');
     } catch (error) {
       console.error('Error exporting timesheet:', error);
@@ -382,18 +446,18 @@ const StaffTimeAttendancePage = () => {
             // Find the staff member in the directory to get additional details
             const staffMemberDetails = staff.find(s => s.id === group.staffId);
             const staffPosition = staffMemberDetails?.position || '';
-            
+
             // Check if this entry corresponds to the last clock action (for highlighting)
-            const isRecentClockAction = 
-              lastClockAction && 
-              lastClockAction.staffId === group.staffId && 
+            const isRecentClockAction =
+              lastClockAction &&
+              lastClockAction.staffId === group.staffId &&
               lastClockAction.date === group.date;
-            
+
             return (
-              <tr 
+              <tr
                 key={index}
                 className={`hover:bg-gray-700 dark:hover:bg-gray-700 light:hover:bg-blue-50 transition-all duration-150 ${isRecentClockAction ? 'bg-blue-900 bg-opacity-20 dark:bg-blue-900 dark:bg-opacity-20 light:bg-blue-100 light:bg-opacity-50' : ''}`}
-                style={{ 
+                style={{
                   animationDelay: `${index * 0.05}s`,
                   animationDuration: "0.2s",
                   animationFillMode: "both"
@@ -527,10 +591,10 @@ const StaffTimeAttendancePage = () => {
         </thead>
         <tbody className="bg-gray-800 bg-opacity-30 dark:bg-gray-800 dark:bg-opacity-30 light:bg-white light:bg-opacity-70 divide-y divide-gray-700 dark:divide-gray-700 light:divide-gray-200">
           {weeklySummary.map((summary, index) => (
-            <tr 
+            <tr
               key={index}
               className="hover:bg-gray-700 dark:hover:bg-gray-700 light:hover:bg-blue-50 transition-all duration-150"
-              style={{ 
+              style={{
                 animationDelay: `${index * 0.05}s`,
                 animationDuration: "0.2s",
                 animationFillMode: "both"
@@ -555,9 +619,9 @@ const StaffTimeAttendancePage = () => {
                 <td key={dayIndex} className="px-4 py-4 whitespace-nowrap text-center">
                   {hours > 0 ? (
                     <div className="inline-flex items-center justify-center">
-                      <div 
+                      <div
                         className="h-7 w-7 rounded-full flex items-center justify-center text-xs font-medium text-white"
-                        style={{ 
+                        style={{
                           backgroundColor: hours > 8 ? '#4F46E5' : hours > 4 ? '#6366F1' : '#818CF8',
                           opacity: Math.min(0.4 + (hours / 10), 1)
                         }}
@@ -597,10 +661,10 @@ const StaffTimeAttendancePage = () => {
   );
 
   return (
-    <div className="min-h-screen flex flex-col bg-dark-gradient dark:bg-dark-gradient light:bg-light-gradient">
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 dark:from-gray-900 dark:to-gray-800 light:from-blue-50 light:to-gray-100 text-white dark:text-white light:text-gray-800 staff-time-attendance-page">
-        {/* Enhanced header with gradient and better spacing */}
-        <div className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 light:from-blue-100 light:via-blue-50 light:to-blue-100 px-8 py-4 flex flex-col md:flex-row justify-between items-center border-b border-gray-700 dark:border-gray-700 light:border-blue-200 shadow-lg">
+    <div className="min-h-screen flex flex-col bg-gray-900 dark:bg-gray-900 light:bg-gray-100" >
+      <div className="min-h-screen bg-gray-900 dark:bg-gray-900 light:bg-gray-100 text-white dark:text-white light:text-gray-800 staff-time-attendance-page">
+        {/* Enhanced header with solid color and better spacing */}
+        <div className="bg-gray-900 dark:bg-gray-900 light:bg-white px-8 py-4 flex flex-col md:flex-row justify-between items-center border-b border-gray-700 dark:border-gray-700 light:border-gray-200 shadow-sm">
           <div className="flex items-center mb-3 md:mb-0">
             <div className="bg-blue-600 light:bg-blue-500 p-2 rounded-lg mr-3 shadow-md">
               <FaUserClock className="text-white light:text-white text-xl" />
@@ -610,35 +674,27 @@ const StaffTimeAttendancePage = () => {
               <p className="text-blue-300 light:text-blue-600 text-sm font-medium">{format(new Date(), 'EEEE, MMMM d, yyyy')}</p>
             </div>
           </div>
-          
+
           <div className="flex items-center space-x-3">
             <ThemeToggle />
-            <button 
-              className="flex items-center space-x-1 px-3 py-1 rounded bg-blue-700 hover:bg-blue-600 dark:bg-blue-700 dark:hover:bg-blue-600 light:bg-blue-600 light:hover:bg-blue-500 transition"
+            <button
+              className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg hover:shadow-blue-500/30 transition-all duration-300 transform hover:-translate-y-0.5 font-medium"
               onClick={goToDashboard}
             >
-              <FaHome className="mr-1" />
+              <FaHome className="text-lg" />
               <span>Dashboard</span>
             </button>
-            <button 
-              className="flex items-center space-x-1 px-3 py-1 rounded bg-red-600 hover:bg-red-500 dark:bg-red-700 dark:hover:bg-red-600 light:bg-red-600 light:hover:bg-red-500 transition"
+            <button
+              className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white shadow-lg hover:shadow-red-500/30 transition-all duration-300 transform hover:-translate-y-0.5 font-medium"
               onClick={handleLogout}
             >
-              <FaSignOutAlt className="mr-1" />
+              <FaSignOutAlt className="text-lg" />
               <span>Logout</span>
             </button>
           </div>
         </div>
-        
-        {/* Database Storage Notice */}
-        <div className="bg-green-600 bg-opacity-90 dark:bg-green-700 dark:bg-opacity-90 light:bg-green-500 light:bg-opacity-80 text-white px-4 py-1 text-center text-sm shadow">
-          <p className="flex items-center justify-center">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clipRule="evenodd" />
-            </svg>
-            All time entries are now securely stored in the database for accurate record keeping
-          </p>
-        </div>
+
+
 
         <div className="container mx-auto px-4 md:px-8 py-8 animate-fadeIn flex flex-col"
           style={{ animation: 'fadeIn 0.5s ease-in-out' }}
@@ -647,9 +703,9 @@ const StaffTimeAttendancePage = () => {
           <section className="w-full mb-10">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Clock In/Out Card */}
-              <div 
-                className="bg-gradient-to-br from-gray-800 to-gray-900 dark:from-gray-800 dark:to-gray-900 light:from-white light:to-blue-50 rounded-xl p-6 shadow-xl border border-gray-700 dark:border-gray-700 light:border-gray-200 transform transition-all duration-300"
-                style={{ 
+              <div
+                className="bg-gray-800 dark:bg-gray-800 light:bg-white rounded-xl p-6 shadow-lg border border-gray-700 dark:border-gray-700 light:border-gray-200 transform transition-all duration-300"
+                style={{
                   animation: 'fadeInUp 0.3s ease-out',
                   animationFillMode: 'both'
                 }}
@@ -660,173 +716,156 @@ const StaffTimeAttendancePage = () => {
                   </div>
                   Clock In/Out
                 </h2>
-                
+
                 <div className="mb-5">
                   <label className="block text-blue-300 light:text-blue-600 mb-2 font-medium">Staff Member</label>
                   <div className="relative">
-                    <select
-                      value={selectedStaff}
-                      onChange={(e) => setSelectedStaff(e.target.value)}
-                      className="w-full p-3 border border-gray-600 dark:border-gray-600 light:border-gray-300 rounded-lg bg-gray-800 dark:bg-gray-800 light:bg-white text-white dark:text-white light:text-gray-800 shadow-inner focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    >
-                      <option value="">Select Staff Member</option>
-                      {staff.map((member) => (
-                        <option key={member.id} value={member.id}>
-                          {member.first_name} {member.last_name} - {member.position || 'Staff Member'}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="space-y-1.5">
+                      <input
+                        type="text"
+                        readOnly
+                        value={currentStaffMember ? `${currentStaffMember.first_name} ${currentStaffMember.last_name} ` : (user?.fullName || user?.email || 'Unknown User')}
+                        className="w-full p-3 border border-gray-600 dark:border-gray-600 light:border-gray-300 rounded-lg bg-gray-800 dark:bg-gray-800 light:bg-white text-white dark:text-white light:text-gray-800 shadow-inner font-semibold"
+                      />
+                    </div>
                   </div>
                 </div>
-                
+
                 <div className="mb-5">
                   <label className="block text-blue-300 light:text-blue-600 mb-2 font-medium">Action</label>
                   <div className="grid grid-cols-2 gap-4">
                     <button
                       type="button"
                       onClick={() => setClockType('in')}
-                      className={`py-3 px-4 rounded-lg flex items-center justify-center transition-all duration-200 shadow-md transform hover:scale-103 active:scale-97 ${
-                        clockType === 'in'
-                          ? 'bg-gradient-to-r from-green-600 to-green-700 light:from-green-500 light:to-green-600 text-white'
-                          : 'bg-gray-700 dark:bg-gray-700 light:bg-gray-200 text-gray-300 dark:text-gray-300 light:text-gray-700 hover:bg-gray-600 light:hover:bg-gray-300'
-                      }`}
+                      className={`py-3 px-4 rounded-lg flex items-center justify-center transition-all duration-200 shadow-md transform hover:scale-103 active:scale-97 ${clockType === 'in'
+                        ? 'bg-green-600 light:bg-green-500 text-white'
+                        : 'bg-gray-700 dark:bg-gray-700 light:bg-gray-200 text-gray-300 dark:text-gray-300 light:text-gray-700 hover:bg-gray-600 light:hover:bg-gray-300'
+                        }`}
                     >
                       <FaPlay className="mr-2" /> Clock In
                     </button>
                     <button
                       type="button"
                       onClick={() => setClockType('out')}
-                      className={`py-3 px-4 rounded-lg flex items-center justify-center transition-all duration-200 shadow-md transform hover:scale-103 active:scale-97 ${
-                        clockType === 'out'
-                          ? 'bg-gradient-to-r from-red-600 to-red-700 light:from-red-500 light:to-red-600 text-white clock-out-pulse'
-                          : 'bg-gray-700 dark:bg-gray-700 light:bg-gray-200 text-gray-300 dark:text-gray-300 light:text-gray-700 hover:bg-gray-600 light:hover:bg-gray-300'
-                      }`}
+                      className={`py-3 px-4 rounded-lg flex items-center justify-center transition-all duration-200 shadow-md transform hover:scale-103 active:scale-97 ${clockType === 'out'
+                        ? 'bg-red-600 light:bg-red-500 text-white clock-out-pulse'
+                        : 'bg-gray-700 dark:bg-gray-700 light:bg-gray-200 text-gray-300 dark:text-gray-300 light:text-gray-700 hover:bg-gray-600 light:hover:bg-gray-300'
+                        }`}
                     >
                       <FaStop className="mr-2" /> Clock Out
                     </button>
                   </div>
+
+                  <div className="mt-6">
+                    <button
+                      type="button"
+                      onClick={handleClockInOut}
+                      className={`w-full py-4 px-6 rounded-lg flex items-center justify-center transition-all duration-200 shadow-lg transform hover:scale-102 active:scale-98 font-bold text-lg text-white ${clockType === 'in'
+                        ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 light:from-green-500 light:to-emerald-500'
+                        : 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 light:from-red-500 light:to-rose-500'
+                        }`}
+                    >
+                      <FaClock className="mr-2" />
+                      Record {clockType === 'in' ? 'Clock In' : 'Clock Out'}
+                    </button>
+                  </div>
                 </div>
-                
-                <div className="mb-5">
-                  <label className="block text-blue-300 light:text-blue-600 mb-2 font-medium">Note (Optional)</label>
-                  <textarea
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    className="w-full p-3 border border-gray-600 dark:border-gray-600 light:border-gray-300 rounded-lg bg-gray-800 dark:bg-gray-800 light:bg-white text-white dark:text-white light:text-gray-800 shadow-inner focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    placeholder="Add a note about this time entry..."
-                    rows="3"
-                  ></textarea>
-                </div>
-                
-                <button
-                  onClick={handleClockInOut}
-                  className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-blue-700 light:from-blue-500 light:to-blue-600 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 light:hover:from-blue-600 light:hover:to-blue-700 shadow-lg flex items-center justify-center transition-all duration-200 transform hover:scale-102 active:scale-98"
-                >
-                  <FaClock className="mr-2" /> Record Time
-                </button>
-              </div>
+              </div >
 
               {/* Filter Time Entries Card */}
-              <div 
-                className="bg-gradient-to-br from-gray-800 to-gray-900 dark:from-gray-800 dark:to-gray-900 light:from-white light:to-blue-50 rounded-xl p-6 shadow-xl border border-gray-700 dark:border-gray-700 light:border-gray-200 transform transition-all duration-300"
-                style={{ 
+              < div
+                className="bg-gray-800 dark:bg-gray-800 light:bg-white rounded-xl p-6 shadow-lg border border-gray-700 dark:border-gray-700 light:border-gray-200 transform transition-all duration-300 hidden md:block"
+                style={{
                   animation: 'fadeInUp 0.3s ease-out 0.1s',
                   animationFillMode: 'both'
                 }}
               >
                 <h2 className="text-xl font-medium text-white light:text-gray-800 mb-5 flex items-center">
-                  <div className="bg-blue-600 light:bg-blue-500 p-1.5 rounded mr-3 shadow">
-                    <FaFilter className="text-white" />
+                  <div className="bg-indigo-600 light:bg-indigo-500 p-1.5 rounded mr-3 shadow">
+                    <FaCalendarAlt className="text-white" />
                   </div>
                   Filter Time Entries
                 </h2>
-                
+
                 <div className="mb-5">
-                  <label className="block text-blue-300 light:text-blue-600 mb-2 font-medium">Staff Member</label>
-                  <select
-                    value={filterStaff}
-                    onChange={(e) => setFilterStaff(e.target.value)}
-                    className="w-full p-3 border border-gray-600 dark:border-gray-600 light:border-gray-300 rounded-lg bg-gray-800 dark:bg-gray-800 light:bg-white text-white dark:text-white light:text-gray-800 shadow-inner focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                  >
-                    <option value="">All Staff Members</option>
-                    {staff.map((member) => (
-                      <option key={member.id} value={member.id}>
-                        {member.first_name} {member.last_name} - {member.position || 'Staff Member'}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
-                  <div>
-                    <label className="block text-blue-300 light:text-blue-600 mb-2 font-medium">Start Date</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <FaCalendarAlt className="text-blue-400 light:text-blue-500" />
-                      </div>
-                      <input
-                        type="date"
-                        value={dateRange.startDate}
-                        onChange={(e) => setDateRange({...dateRange, startDate: e.target.value})}
-                        className="pl-10 w-full p-3 border border-gray-600 dark:border-gray-600 light:border-gray-300 rounded-lg bg-gray-800 dark:bg-gray-800 light:bg-white text-white dark:text-white light:text-gray-800 shadow-inner focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                      />
+                  <label className="block text-blue-300 light:text-blue-600 mb-2 font-medium">Start Date</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <FaCalendarAlt className="text-blue-400 light:text-blue-500" />
                     </div>
+                    <input
+                      type="date"
+                      value={dateRange.startDate}
+                      onChange={(e) => setDateRange({ ...dateRange, startDate: e.target.value })}
+                      className="pl-10 w-full p-3 border border-gray-600 dark:border-gray-600 light:border-gray-300 rounded-lg bg-gray-800 dark:bg-gray-800 light:bg-white text-white dark:text-white light:text-gray-800 shadow-inner focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    />
                   </div>
-                  <div>
-                    <label className="block text-blue-300 light:text-blue-600 mb-2 font-medium">End Date</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <FaCalendarAlt className="text-blue-400 light:text-blue-500" />
-                      </div>
-                      <input
-                        type="date"
-                        value={dateRange.endDate}
-                        onChange={(e) => setDateRange({...dateRange, endDate: e.target.value})}
-                        className="pl-10 w-full p-3 border border-gray-600 dark:border-gray-600 light:border-gray-300 rounded-lg bg-gray-800 dark:bg-gray-800 light:bg-white text-white dark:text-white light:text-gray-800 shadow-inner focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                      />
+                </div>
+
+                <div className="mb-5">
+                  <label className="block text-blue-300 light:text-blue-600 mb-2 font-medium">End Date</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <FaCalendarAlt className="text-blue-400 light:text-blue-500" />
                     </div>
+                    <input
+                      type="date"
+                      value={dateRange.endDate}
+                      onChange={(e) => setDateRange({ ...dateRange, endDate: e.target.value })}
+                      className="pl-10 w-full p-3 border border-gray-600 dark:border-gray-600 light:border-gray-300 rounded-lg bg-gray-800 dark:bg-gray-800 light:bg-white text-white dark:text-white light:text-gray-800 shadow-inner focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    />
                   </div>
                 </div>
-                
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-3 sm:space-y-0">
-                  <div className="flex space-x-2 bg-gray-900 dark:bg-gray-900 light:bg-gray-200 p-1 rounded-lg">
-                    <button
-                      onClick={() => setViewMode('list')}
-                      className={`py-2 px-4 rounded-md flex items-center transition-all duration-200 transform hover:scale-103 active:scale-97 ${
-                        viewMode === 'list'
-                          ? 'bg-blue-600 light:bg-blue-500 text-white shadow'
-                          : 'bg-transparent text-gray-300 dark:text-gray-300 light:text-gray-600 hover:text-white dark:hover:text-white light:hover:text-gray-900'
-                      }`}
-                    >
-                      <FaListAlt className="mr-2" /> List View
-                    </button>
-                    <button
-                      onClick={() => setViewMode('summary')}
-                      className={`py-2 px-4 rounded-md flex items-center transition-all duration-200 transform hover:scale-103 active:scale-97 ${
-                        viewMode === 'summary'
-                          ? 'bg-blue-600 light:bg-blue-500 text-white shadow'
-                          : 'bg-transparent text-gray-300 dark:text-gray-300 light:text-gray-600 hover:text-white dark:hover:text-white light:hover:text-gray-900'
-                      }`}
-                    >
-                      <FaChartBar className="mr-2" /> Summary
-                    </button>
-                  </div>
-                  <button
-                    onClick={exportTimesheet}
-                    className="py-2 px-4 bg-gradient-to-r from-green-600 to-green-700 light:from-green-500 light:to-green-600 text-white rounded-lg hover:from-green-700 hover:to-green-800 light:hover:from-green-600 light:hover:to-green-700 shadow flex items-center justify-center transition-all duration-200 transform hover:scale-105 active:scale-95"
-                  >
-                    <FaFileExport className="mr-2" /> Export Data
-                  </button>
-                </div>
-              </div>
+              </div >
+            </div >
+          </section >
+
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-3 sm:space-y-0">
+            <div className="flex space-x-2 bg-gray-900 dark:bg-gray-900 light:bg-gray-200 p-1 rounded-lg">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`py-2 px-4 rounded-md flex items-center transition-all duration-200 transform hover:scale-103 active:scale-97 ${viewMode === 'list'
+                  ? 'bg-blue-600 light:bg-blue-500 text-white shadow'
+                  : 'bg-transparent text-gray-300 dark:text-gray-300 light:text-gray-600 hover:text-white dark:hover:text-white light:hover:text-gray-900'
+                  }`}
+              >
+                <FaListAlt className="mr-2" /> List View
+              </button>
+              <button
+                onClick={() => setViewMode('summary')}
+                className={`py-2 px-4 rounded-md flex items-center transition-all duration-200 transform hover:scale-103 active:scale-97 ${viewMode === 'summary'
+                  ? 'bg-blue-600 light:bg-blue-500 text-white shadow'
+                  : 'bg-transparent text-gray-300 dark:text-gray-300 light:text-gray-600 hover:text-white dark:hover:text-white light:hover:text-gray-900'
+                  }`}
+              >
+                <FaChartBar className="mr-2" /> Summary
+              </button>
             </div>
-          </section>
+
+            <div className="flex space-x-2">
+              <button
+                onClick={() => {
+                  setDateRange({ startDate: '', endDate: '' });
+                  toast.success('Showing all history');
+                }}
+                className="py-2 px-4 bg-indigo-600 light:bg-indigo-500 text-white rounded-lg hover:bg-indigo-700 light:hover:bg-indigo-600 shadow flex items-center justify-center transition-all duration-200 transform hover:scale-105 active:scale-95"
+              >
+                <FaListAlt className="mr-2" /> View All History
+              </button>
+              <button
+                onClick={exportTimesheet}
+                className="py-2 px-4 bg-green-600 light:bg-green-500 text-white rounded-lg hover:bg-green-700 light:hover:bg-green-600 shadow flex items-center justify-center transition-all duration-200 transform hover:scale-105 active:scale-95"
+              >
+                <FaFileExport className="mr-2" /> Export Data
+              </button>
+            </div>
+          </div>
 
           {/* Bottom Section - Time Entries in its own row */}
           <section className="w-full mt-4 border-t border-gray-700 dark:border-gray-700 light:border-gray-300 pt-8">
-            <div 
-              className="bg-gradient-to-br from-gray-800 to-gray-900 dark:from-gray-800 dark:to-gray-900 light:from-white light:to-blue-50 rounded-xl p-6 shadow-xl border border-gray-700 dark:border-gray-700 light:border-gray-200"
-              style={{ 
+            <div
+              className="bg-gray-800 dark:bg-gray-800 light:bg-white rounded-xl p-6 shadow-lg border border-gray-700 dark:border-gray-700 light:border-gray-200"
+              style={{
                 animation: 'fadeInUp 0.3s ease-out 0.2s',
                 animationFillMode: 'both'
               }}
@@ -840,7 +879,7 @@ const StaffTimeAttendancePage = () => {
                   {Object.keys(groupedEntries).length} Records
                 </span>
               </h2>
-              
+
               {loading ? (
                 <div className="flex justify-center items-center h-64">
                   <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -853,9 +892,9 @@ const StaffTimeAttendancePage = () => {
               )}
             </div>
           </section>
-        </div>
-      </div>
-      
+        </div >
+      </div >
+
       <style jsx>{`
         @keyframes fadeIn {
           from { opacity: 0; }
@@ -883,7 +922,7 @@ const StaffTimeAttendancePage = () => {
           animation: pulseOutline 2s infinite;
         }
       `}</style>
-    </div>
+    </div >
   );
 };
 

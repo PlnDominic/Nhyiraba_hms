@@ -11,7 +11,6 @@ const BarManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
 
   // Fetch drinks from the database (using menu items with beverage categories)
   const fetchDrinks = async () => {
@@ -48,16 +47,12 @@ const BarManagement = () => {
     fetchDrinks();
   }, []);
 
-  // Filter drinks based on search and category
+  // Filter drinks based on search
   const filteredDrinks = drinks.filter(drink => {
     const matchesSearch = drink.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (drink.description && drink.description.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    const matchesCategory = categoryFilter ? 
-      (drink.category === categoryFilter || 
-       (drink.restaurant_categories && drink.restaurant_categories.name === categoryFilter)) : true;
-    
-    return matchesSearch && matchesCategory;
+    return matchesSearch;
   });
 
   // Get icon based on drink category
@@ -162,24 +157,6 @@ const BarManagement = () => {
                 : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400'
             } border focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors`}
           />
-        </div>
-        
-        <div className="flex-1 min-w-[200px]">
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className={`w-full px-4 py-2 rounded-lg appearance-none ${
-              theme === 'dark'
-                ? 'bg-gray-800 border-gray-700 text-white'
-                : 'bg-white border-gray-300 text-gray-800'
-            } border focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors`}
-          >
-            <option value="">All Categories</option>
-            <option value="Cocktails">Cocktails</option>
-            <option value="Wine">Wine</option>
-            <option value="Beer">Beer</option>
-            <option value="Non-Alcoholic">Non-Alcoholic</option>
-          </select>
         </div>
         
         <button

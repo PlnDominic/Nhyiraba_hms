@@ -8,7 +8,7 @@ import supabase from '../supabaseClient';
 export const checkUserExists = async (email) => {
   try {
     console.log(`Checking if user with email ${email} already exists...`);
-    
+
     // First try the most reliable method - check the user_profiles table
     // We're storing email in profiles, so this should work most of the time
     console.log('Checking user_profiles table first...');
@@ -17,19 +17,19 @@ export const checkUserExists = async (email) => {
       .select('user_id, email')
       .eq('email', email)
       .maybeSingle();
-    
+
     if (profileError) {
       console.warn('Error checking user_profiles table:', profileError);
     } else if (profileData) {
       console.log('User found in user_profiles table:', profileData);
       return true;
     }
-    
+
     // Try the Supabase auth API (this might not have the required permissions)
     try {
       console.log('Trying Supabase auth admin API...');
       const { data, error } = await supabase.auth.admin.getUserByEmail(email);
-      
+
       if (error) {
         console.warn('Error using admin API:', error);
       } else if (data && data.user) {
@@ -39,7 +39,7 @@ export const checkUserExists = async (email) => {
     } catch (err) {
       console.warn('Admin API not available:', err);
     }
-    
+
     // Try a sign-in attempt that doesn't create a user
     try {
       console.log('Trying sign-in attempt...');
@@ -49,7 +49,7 @@ export const checkUserExists = async (email) => {
           shouldCreateUser: false
         }
       });
-      
+
       // If we get a "User not found" error, then the user doesn't exist
       // If we get any other error, it's likely the user exists
       if (signInError) {
@@ -68,7 +68,7 @@ export const checkUserExists = async (email) => {
     } catch (err) {
       console.warn('Sign-in attempt failed:', err);
     }
-    
+
     // If we've tried everything and haven't returned, assume user does not exist
     console.log('All checks completed, assuming user does not exist');
     return false;
@@ -89,7 +89,7 @@ export const checkUserExists = async (email) => {
 export const createUserAccount = async (userData) => {
   try {
     console.log('Starting createUserAccount for email:', userData.email);
-    
+
     // First check if user already exists
     const userExists = await checkUserExists(userData.email);
     if (userExists) {
@@ -101,9 +101,9 @@ export const createUserAccount = async (userData) => {
         message: `A user with email ${userData.email} is already registered in the system.`
       };
     }
-    
+
     console.log('User does not exist, proceeding with account creation');
-    
+
     // Step 1: Create auth user via signUp
     console.log('Step 1: Creating auth user via signUp');
     const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -119,7 +119,7 @@ export const createUserAccount = async (userData) => {
 
     if (authError) {
       console.error('Error creating auth user:', authError);
-      
+
       // Check if error indicates user already exists
       if (authError.message.includes('already registered')) {
         return {
@@ -129,10 +129,10 @@ export const createUserAccount = async (userData) => {
           message: `A user with email ${userData.email} is already registered in the system.`
         };
       }
-      
+
       throw authError;
     }
-    
+
     console.log('Auth user created successfully:', authData.user.id);
 
     // Step 2: Create the user profile
@@ -147,7 +147,6 @@ export const createUserAccount = async (userData) => {
           position: userData.position,
           department: userData.department,
           contact_number: userData.contactNumber,
-          permissions: userData.permissions,
           email: userData.email // Store email in profile for easier queries
         }
       ])
@@ -156,7 +155,7 @@ export const createUserAccount = async (userData) => {
 
     if (profileError) {
       console.error("Error creating user profile:", profileError);
-      
+
       // Check if profile already exists (unique constraint violation)
       if (profileError.code === '23505') { // PostgreSQL unique constraint violation
         console.log('Profile already exists, returning USER_ALREADY_EXISTS');
@@ -167,10 +166,10 @@ export const createUserAccount = async (userData) => {
           message: `A profile for user ${userData.email} already exists.`
         };
       }
-      
+
       throw profileError;
     }
-    
+
     console.log('User profile created successfully');
 
     // Step 3: Store the credentials for later retrieval
@@ -189,21 +188,43 @@ export const createUserAccount = async (userData) => {
       console.log("Staff credentials stored successfully");
     }
 
-    // Set up RLS policy for this user using a stored procedure or function
-    console.log('Step 4: Setting up user permissions');
-    const { error: rlsError } = await supabase
-      .rpc('setup_user_permissions', { 
-        user_id: authData.user.id,
-        user_role: userData.role
-      });
-    
-    if (rlsError) {
-      console.warn("Warning: Could not set up RLS policies for user:", rlsError);
-      // Don't throw - we want to continue even if this fails
+    // Step 4: Save explicit permissions to user_permissions table
+    console.log('Step 4: Saving explicit user permissions');
+    if (userData.permissions && userData.permissions.length > 0) {
+      try {
+        // First, get permission IDs from permission names
+        const { data: permissionsData, error: permError } = await supabase
+          .from('permissions')
+          .select('id, name')
+          .in('name', userData.permissions);
+
+        if (permError) {
+          console.warn("Warning: Could not fetch permissions:", permError);
+        } else if (permissionsData && permissionsData.length > 0) {
+          // Insert permissions into user_permissions table
+          const permissionInserts = permissionsData.map(perm => ({
+            user_id: authData.user.id,
+            permission_id: perm.id
+          }));
+
+          const { error: userPermError } = await supabase
+            .from('user_permissions')
+            .insert(permissionInserts);
+
+          if (userPermError) {
+            console.warn("Warning: Could not insert user permissions:", userPermError);
+          } else {
+            console.log(`Successfully saved ${permissionInserts.length} permissions for user`);
+          }
+        }
+      } catch (permErr) {
+        console.warn("Warning: Error processing permissions:", permErr);
+        // Don't throw - continue even if permissions fail
+      }
     } else {
-      console.log("User permissions set up successfully");
+      console.log("No permissions specified, skipping permission assignment");
     }
-    
+
     console.log('User account creation completed successfully');
     return {
       success: true,
@@ -215,7 +236,7 @@ export const createUserAccount = async (userData) => {
     };
   } catch (error) {
     console.error('Error creating user account:', error);
-    
+
     // Check for common error patterns
     if (error.message && error.message.includes('already registered')) {
       return {
@@ -225,7 +246,7 @@ export const createUserAccount = async (userData) => {
         message: `A user with email ${userData.email} is already registered.`
       };
     }
-    
+
     return {
       success: false,
       error: error.message || 'Failed to create user account',
@@ -240,17 +261,77 @@ export const createUserAccount = async (userData) => {
  */
 export const getAllUsers = async () => {
   try {
-    // Instead of accessing auth users directly, just get profiles
-    // This avoids permission issues with the auth.users table
+    // Step 1: Get user profiles
     const { data: profiles, error: profilesError } = await supabase
       .from('user_profiles')
-      .select('*');
-      
+      .select('*')
+      .order('created_at', { ascending: false });
+
     if (profilesError) throw profilesError;
-    
+
+    if (!profiles || profiles.length === 0) {
+      return {
+        success: true,
+        data: []
+      };
+    }
+
+    // Step 2: Get all user permissions
+    // Get user IDs from profiles
+    const userIds = profiles.map(p => p.user_id);
+
+    // Fetch user_permissions for these users (just the IDs, no nested query)
+    const { data: userPermissions, error: userPermError } = await supabase
+      .from('user_permissions')
+      .select('user_id, permission_id')
+      .in('user_id', userIds);
+
+    if (userPermError) {
+      console.warn('Error fetching user permissions:', userPermError);
+      // Continue even if permissions fetch fails - users will just have empty permissions
+    }
+
+    // Step 3: Get all permissions to map IDs to names
+    const { data: allPermissions, error: permError } = await supabase
+      .from('permissions')
+      .select('id, name, description');
+
+    if (permError) {
+      console.warn('Error fetching permissions:', permError);
+    }
+
+    // Step 4: Create a map of permission_id -> permission name
+    const permissionIdToName = {};
+    if (allPermissions) {
+      allPermissions.forEach(perm => {
+        permissionIdToName[perm.id] = perm.name;
+      });
+    }
+
+    // Step 5: Create a map of user_id -> permissions array (names)
+    const permissionsMap = {};
+    if (userPermissions) {
+      userPermissions.forEach(up => {
+        if (!permissionsMap[up.user_id]) {
+          permissionsMap[up.user_id] = [];
+        }
+        const permissionName = permissionIdToName[up.permission_id];
+        if (permissionName) {
+          permissionsMap[up.user_id].push(permissionName);
+        }
+      });
+    }
+
+    // Step 6: Merge profiles with permissions
+    // Note: Email may or may not be in user_profiles table depending on schema
+    const usersWithPermissions = profiles.map(profile => ({
+      ...profile,
+      permissions: permissionsMap[profile.user_id] || []
+    }));
+
     return {
       success: true,
-      data: profiles
+      data: usersWithPermissions
     };
   } catch (error) {
     console.error('Error getting users:', error);
@@ -271,22 +352,140 @@ export const updateUserProfile = async (userId, profileData) => {
   try {
     const { data, error } = await supabase
       .from('user_profiles')
-      .update(profileData)
+      .update({
+        ...profileData,
+        updated_at: new Date().toISOString()
+      })
       .eq('user_id', userId)
-      .select('*')
-      .single();
-      
+      .select('*');
+
     if (error) throw error;
-    
+
+    // Check if any rows were updated
+    if (!data || data.length === 0) {
+      throw new Error('No profile found to update. You may not have permission to update this user or the user does not exist.');
+    }
+
     return {
       success: true,
-      data
+      data: data[0]
     };
   } catch (error) {
     console.error('Error updating user profile:', error);
     return {
       success: false,
       error: error.message || 'Failed to update user profile'
+    };
+  }
+};
+
+/**
+ * Update user permissions
+ * @param {string} userId - The user ID
+ * @param {Array<string>} permissionNames - Array of permission names to assign
+ * @returns {Promise<Object>} - Success status or error
+ */
+export const updateUserPermissions = async (userId, permissionNames) => {
+  try {
+    // Step 1: Get permission IDs from permission names
+    const { data: permissionsData, error: permError } = await supabase
+      .from('permissions')
+      .select('id, name')
+      .in('name', permissionNames);
+
+    if (permError) throw permError;
+
+    if (!permissionsData || permissionsData.length === 0) {
+      // If no permissions found, just clear all permissions for this user
+      const { error: deleteError } = await supabase
+        .from('user_permissions')
+        .delete()
+        .eq('user_id', userId);
+
+      if (deleteError) throw deleteError;
+
+      return {
+        success: true,
+        message: 'User permissions cleared'
+      };
+    }
+
+    // Step 2: Delete existing permissions for this user
+    const { error: deleteError } = await supabase
+      .from('user_permissions')
+      .delete()
+      .eq('user_id', userId);
+
+    if (deleteError) {
+      console.warn('Warning: Could not delete existing permissions:', deleteError);
+      // Continue anyway - we'll use upsert below
+    }
+
+    // Step 3: Insert new permissions
+    const permissionInserts = permissionsData.map(perm => ({
+      user_id: userId,
+      permission_id: perm.id
+    }));
+
+    if (permissionInserts.length > 0) {
+      const { error: insertError } = await supabase
+        .from('user_permissions')
+        .insert(permissionInserts);
+
+      if (insertError) throw insertError;
+    }
+
+    return {
+      success: true,
+      message: `Updated ${permissionInserts.length} permissions for user`
+    };
+  } catch (error) {
+    console.error('Error updating user permissions:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to update user permissions'
+    };
+  }
+};
+
+/**
+ * Update user profile and permissions
+ * @param {string} userId - The user ID
+ * @param {Object} profileData - The profile data to update
+ * @param {Array<string>} permissions - Array of permission names to assign
+ * @returns {Promise<Object>} - Success status or error
+ */
+export const updateUser = async (userId, profileData, permissions = null) => {
+  try {
+    // Update profile
+    const profileResult = await updateUserProfile(userId, profileData);
+    if (!profileResult.success) {
+      return profileResult;
+    }
+
+    // Update permissions if provided
+    if (permissions !== null) {
+      const permResult = await updateUserPermissions(userId, permissions);
+      if (!permResult.success) {
+        console.warn('Warning: Profile updated but permissions update failed:', permResult.error);
+        // Return success for profile update, but note the permission issue
+        return {
+          success: true,
+          warning: permResult.error,
+          data: profileResult.data
+        };
+      }
+    }
+
+    return {
+      success: true,
+      data: profileResult.data
+    };
+  } catch (error) {
+    console.error('Error updating user:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to update user'
     };
   }
 };
@@ -303,9 +502,9 @@ export const deleteUserAccount = async (userId) => {
       .from('user_profiles')
       .update({ active: false })
       .eq('user_id', userId);
-    
+
     if (updateError) throw updateError;
-    
+
     return {
       success: true
     };
@@ -334,15 +533,15 @@ export const getUserCredentials = async (userId = null) => {
       }
       userId = authData.session.user.id;
     }
-    
+
     const { data, error } = await supabase
       .from('staff_credentials')
       .select('*')
       .eq('user_id', userId)
       .maybeSingle();
-      
+
     if (error) throw error;
-    
+
     return {
       success: true,
       data
@@ -352,6 +551,59 @@ export const getUserCredentials = async (userId = null) => {
     return {
       success: false,
       error: error.message || 'Failed to get user credentials'
+    };
+  }
+};
+
+/**
+ * Get a user's profile and permissions in one call.
+ * @param {string} userId - The user ID.
+ * @returns {Promise<Object>} - { success: true, data: { profile, permissions } } or error object.
+ */
+export const getUserDetails = async (userId) => {
+  try {
+    // Fetch profile
+    const { data: profileData, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (profileError) throw profileError;
+
+    // Fetch permissions
+    const { data: permData, error: permError } = await supabase
+      .from('user_permissions')
+      .select('permission_id')
+      .eq('user_id', userId);
+
+    if (permError) throw permError;
+
+    // Fetch permission names
+    let permissions = [];
+    if (permData && permData.length > 0) {
+      const permIds = permData.map(p => p.permission_id);
+      const { data: permNames, error: nameError } = await supabase
+        .from('permissions')
+        .select('name')
+        .in('id', permIds);
+
+      if (nameError) throw nameError;
+      permissions = permNames.map(p => p.name);
+    }
+
+    return {
+      success: true,
+      data: {
+        profile: profileData,
+        permissions
+      }
+    };
+  } catch (error) {
+    console.error('Error fetching user details:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to fetch user details'
     };
   }
 }; 

@@ -1,0 +1,229 @@
+/* Rooms Page Styles */
+
+.rooms-page {
+  padding: 20px;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.rooms-page h1 {
+  font-size: 2rem;
+  margin-bottom: 20px;
+  color: #1f2937;
+}
+
+/* Debug info */
+.debug-info {
+  font-size: 12px;
+  color: #666;
+  margin: 10px 0;
+  padding: 10px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  border-left: 3px solid #3b82f6;
+}
+
+/* Room Statistics */
+.room-statistics {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 15px;
+  margin-bottom: 25px;
+}
+
+.stat-box {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  border-left: 4px solid #3b82f6;
+}
+
+.stat-box h3 {
+  font-size: 0.9rem;
+  color: #6b7280;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.stat-box p {
+  font-size: 1.8rem;
+  font-weight: bold;
+  color: #1f2937;
+  margin: 0;
+}
+
+.stat-box.available {
+  border-left-color: #10b981;
+}
+
+.stat-box.occupied {
+  border-left-color: #ef4444;
+}
+
+.stat-box.reserved {
+  border-left-color: #f59e0b;
+}
+
+.stat-box.maintenance {
+  border-left-color: #6b7280;
+}
+
+/* Filters */
+.rooms-filter {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 25px;
+}
+
+.search-box {
+  margin-bottom: 15px;
+}
+
+.search-box input {
+  width: 100%;
+  padding: 10px 15px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+
+.search-box input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.filter-controls {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+}
+
+.filter-controls select {
+  padding: 10px 15px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  background: white;
+  cursor: pointer;
+}
+
+.filter-controls select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Rooms Grid - 6 cards per row (default for large screens) */
+.rooms-grid {
+  display: grid !important;
+  grid-template-columns: repeat(6, 1fr) !important;
+  gap: 12px !important;
+  margin-top: 20px;
+  width: 100%;
+}
+
+/* Loading and No Rooms Messages */
+.loading-message,
+.no-rooms-message {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 40px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.no-rooms-message p {
+  font-size: 1.1rem;
+  color: #6b7280;
+  margin-bottom: 15px;
+}
+
+.no-rooms-message button {
+  padding: 10px 20px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: background 0.2s;
+}
+
+.no-rooms-message button:hover {
+  background: #2563eb;
+}
+
+/* Responsive Design */
+@media (min-width: 1920px) {
+  .rooms-grid {
+    grid-template-columns: repeat(7, 1fr) !important;
+  }
+}
+
+@media (min-width: 1600px) and (max-width: 1919px) {
+  .rooms-grid {
+    grid-template-columns: repeat(6, 1fr) !important;
+  }
+}
+
+@media (max-width: 1599px) {
+  .rooms-grid {
+    grid-template-columns: repeat(5, 1fr) !important;
+  }
+}
+
+@media (max-width: 1399px) {
+  .rooms-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
+  }
+  
+  .room-statistics {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+@media (max-width: 1024px) {
+  .rooms-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+  
+  .room-statistics {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  .filter-controls {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .rooms-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+  
+  .room-statistics {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  
+  .filter-controls {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .rooms-grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  .room-statistics {
+    grid-template-columns: 1fr;
+  }
+}

@@ -54,19 +54,31 @@ const UserProfileModal = ({ isOpen, onClose, user }) => {
 
             // Handle image upload if avatar is provided
             if (formData.avatar) {
-                const fileName = `avatar-${user.id}-${Date.now()}`;
+                const fileExt = formData.avatar.name.split('.').pop();
+                const fileName = `avatar-${user.id}-${Date.now()}.${fileExt}`;
+                const filePath = `public/${fileName}`;
+                
                 const { data, error: uploadError } = await supabase.storage
                     .from('avatars')
-                    .upload(`public/${fileName}`, formData.avatar);
+                    .upload(filePath, formData.avatar, {
+                        upsert: true,
+                        cacheControl: '3600',
+                        contentType: formData.avatar.type
+                    });
 
                 if (uploadError) {
+                    if (uploadError.message.includes('Bucket not found')) {
+                        throw new Error('Storage bucket "avatars" not found. Please contact an administrator to set up storage.');
+                    } else if (uploadError.message.includes('row-level security')) {
+                        throw new Error('Upload denied by security policy. Please contact an administrator.');
+                    }
                     throw uploadError;
                 }
 
                 // Get the public URL for the uploaded image
                 const { data: urlData } = supabase.storage
                     .from('avatars')
-                    .getPublicUrl(`public/${fileName}`);
+                    .getPublicUrl(filePath);
 
                 // Update the user profile with the avatar URL
                 if (urlData) {

@@ -390,19 +390,10 @@ export default class RoomsRepository extends BaseRepository {
         return false;
       }
 
-      console.log('🏨 Initializing default hotel rooms...');
+      console.log('🏨 Production mode: No mock rooms initialized');
 
-      const defaultRooms = [
-        { id: 101, room_number: 'Mint', type: 'Standard', status: 'Available', price: 500, capacity: 2, amenities: '["WiFi", "TV", "AC"]' },
-        { id: 102, room_number: 'Cinnamon', type: 'Standard', status: 'Available', price: 500, capacity: 2, amenities: '["WiFi", "TV", "AC"]' },
-        { id: 103, room_number: 'Basil', type: 'Standard', status: 'Available', price: 500, capacity: 2, amenities: '["WiFi", "TV", "AC"]' },
-        { id: 104, room_number: 'Licorice', type: 'Superior', status: 'Available', price: 750, capacity: 3, amenities: '["WiFi", "TV", "AC", "Mini Bar"]' },
-        { id: 105, room_number: 'Marigold', type: 'Superior', status: 'Available', price: 750, capacity: 3, amenities: '["WiFi", "TV", "AC", "Mini Bar"]' },
-        { id: 106, room_number: 'Lotus', type: 'Superior', status: 'Available', price: 750, capacity: 3, amenities: '["WiFi", "TV", "AC", "Mini Bar"]' },
-        { id: 107, room_number: 'Jasmine', type: 'Superior', status: 'Available', price: 750, capacity: 3, amenities: '["WiFi", "TV", "AC", "Mini Bar"]' },
-        { id: 108, room_number: 'Private', type: 'Superior', status: 'Available', price: 750, capacity: 3, amenities: '["WiFi", "TV", "AC", "Mini Bar"]' },
-        { id: 109, room_number: 'Chamomile', type: 'Executive', status: 'Available', price: 1250, capacity: 4, amenities: '["WiFi", "TV", "AC", "Mini Bar", "Jacuzzi", "Room Service"]' }
-      ];
+      // No mock data for production
+      const defaultRooms = [];
 
       await this.bulkCreate(defaultRooms, true); // Mark as synced since these are default
       console.log('✅ Default rooms initialized successfully');

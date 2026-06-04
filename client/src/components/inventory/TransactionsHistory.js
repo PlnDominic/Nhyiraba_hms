@@ -14,54 +14,55 @@ const TransactionsHistory = ({ itemId = null }) => {
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [transactionType, setTransactionType] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'transaction_date', direction: 'desc' });
-  
+
   // Add state for handling edit/view modals
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [isViewMode, setIsViewMode] = useState(false);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
-  
+
   useEffect(() => {
     fetchTransactions();
   }, []); // Remove fetchTransactions from dependencies to prevent infinite loop
-  
+
   useEffect(() => {
     let filtered = [...transactions];
-    
+
     // Filter by item if itemId is provided
     if (itemId) {
       filtered = filtered.filter(transaction => transaction.item_id === itemId);
     }
-    
+
     // Filter by search term
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(transaction => 
+      filtered = filtered.filter(transaction =>
         (transaction.inventory_items?.name?.toLowerCase().includes(term)) ||
         (transaction.reference_number?.toLowerCase().includes(term)) ||
         (transaction.notes?.toLowerCase().includes(term)) ||
-        (transaction.department?.toLowerCase().includes(term))
+        (transaction.department?.toLowerCase().includes(term)) ||
+        (transaction.department_name?.toLowerCase().includes(term))
       );
     }
-    
+
     // Filter by transaction type
     if (transactionType) {
       filtered = filtered.filter(transaction => transaction.transaction_type === transactionType);
     }
-    
+
     // Filter by date range
     if (dateRange.start) {
       const startDate = new Date(dateRange.start);
       filtered = filtered.filter(transaction => new Date(transaction.transaction_date) >= startDate);
     }
-    
+
     if (dateRange.end) {
       const endDate = new Date(dateRange.end);
       endDate.setHours(23, 59, 59, 999); // End of the day
       filtered = filtered.filter(transaction => new Date(transaction.transaction_date) <= endDate);
     }
-    
+
     // Sort transactions
     if (sortConfig.key) {
       filtered.sort((a, b) => {
@@ -69,7 +70,7 @@ const TransactionsHistory = ({ itemId = null }) => {
         if (sortConfig.key.includes('.')) {
           const [parent, child] = sortConfig.key.split('.');
           if (!a[parent] || !b[parent]) return 0;
-          
+
           if (a[parent][child] < b[parent][child]) {
             return sortConfig.direction === 'asc' ? -1 : 1;
           }
@@ -78,7 +79,7 @@ const TransactionsHistory = ({ itemId = null }) => {
           }
           return 0;
         }
-        
+
         // Handle regular properties
         if (a[sortConfig.key] < b[sortConfig.key]) {
           return sortConfig.direction === 'asc' ? -1 : 1;
@@ -89,10 +90,10 @@ const TransactionsHistory = ({ itemId = null }) => {
         return 0;
       });
     }
-    
+
     setFilteredTransactions(filtered);
   }, [transactions, itemId, searchTerm, dateRange, transactionType, sortConfig]);
-  
+
   const handleSort = (key) => {
     let direction = 'asc';
     if (sortConfig.key === key && sortConfig.direction === 'asc') {
@@ -100,12 +101,12 @@ const TransactionsHistory = ({ itemId = null }) => {
     }
     setSortConfig({ key, direction });
   };
-  
+
   const getSortIcon = (key) => {
     if (sortConfig.key !== key) return <FaSort className="text-gray-300" />;
     return sortConfig.direction === 'asc' ? <FaSortUp /> : <FaSortDown />;
   };
-  
+
   const formatDate = (dateString) => {
     try {
       return format(new Date(dateString), 'MMM d, yyyy h:mm a');
@@ -113,7 +114,7 @@ const TransactionsHistory = ({ itemId = null }) => {
       return 'Invalid date';
     }
   };
-  
+
   const getTransactionTypeLabel = (type) => {
     switch (type) {
       case 'purchase':
@@ -128,10 +129,10 @@ const TransactionsHistory = ({ itemId = null }) => {
         return <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs">{type}</span>;
     }
   };
-  
+
   const exportToCSV = () => {
     if (filteredTransactions.length === 0) return;
-    
+
     // Create CSV content
     const headers = [
       'Date',
@@ -145,7 +146,7 @@ const TransactionsHistory = ({ itemId = null }) => {
       'Department',
       'Notes'
     ];
-    
+
     const csvContent = [
       headers.join(','),
       ...filteredTransactions.map(transaction => [
@@ -157,11 +158,11 @@ const TransactionsHistory = ({ itemId = null }) => {
         `₵${parseFloat(transaction.unit_price || 0).toFixed(2)}`,
         `₵${parseFloat(transaction.total_price || 0).toFixed(2)}`,
         `"${transaction.reference_number || ''}"`,
-        `"${transaction.department || ''}"`,
+        `"${transaction.department || transaction.department_name || ''}"`,
         `"${(transaction.notes || '').replace(/"/g, '""')}"` // Escape quotes in notes
       ].join(','))
     ].join('\n');
-    
+
     // Create download link
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -173,7 +174,7 @@ const TransactionsHistory = ({ itemId = null }) => {
     link.click();
     document.body.removeChild(link);
   };
-  
+
   // Handle viewing transaction details
   const handleViewTransaction = (transaction) => {
     setSelectedTransaction(transaction);
@@ -247,7 +248,7 @@ const TransactionsHistory = ({ itemId = null }) => {
             </div>
             <div class="receipt-item">
               <span>Department:</span>
-              <span>${transaction.department || 'N/A'}</span>
+              <span>${transaction.department || transaction.department_name || 'N/A'}</span>
             </div>
             
             ${transaction.notes ? `
@@ -262,13 +263,13 @@ const TransactionsHistory = ({ itemId = null }) => {
         </body>
       </html>
     `;
-    
+
     // Open a new window and print
     const printWindow = window.open('', '_blank');
     printWindow.document.write(printContent);
     printWindow.document.close();
     printWindow.focus();
-    
+
     // Print after a short delay to ensure content is loaded
     setTimeout(() => {
       printWindow.print();
@@ -284,12 +285,12 @@ const TransactionsHistory = ({ itemId = null }) => {
     setIsConfirmDeleteOpen(false);
     setTransactionToDelete(null);
   };
-  
+
   return (
     <div className={`${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'} rounded-lg shadow overflow-hidden`}>
       <div className={`p-4 border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
         <h2 className={`text-lg font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Transaction History</h2>
-        
+
         {/* Filters */}
         <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-4">
           {/* Search */}
@@ -300,24 +301,22 @@ const TransactionsHistory = ({ itemId = null }) => {
             <input
               type="text"
               placeholder="Search transactions..."
-              className={`pl-10 pr-4 py-2 w-full rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                theme === 'dark' 
-                  ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+              className={`pl-10 pr-4 py-2 w-full rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === 'dark'
+                  ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
                   : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400'
-              } border`}
+                } border`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          
+
           {/* Transaction Type Filter */}
           <div>
             <select
-              className={`w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                theme === 'dark' 
-                  ? 'bg-gray-700 border-gray-600 text-white' 
+              className={`w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === 'dark'
+                  ? 'bg-gray-700 border-gray-600 text-white'
                   : 'bg-white border-gray-300 text-gray-800'
-              }`}
+                }`}
               value={transactionType}
               onChange={(e) => setTransactionType(e.target.value)}
             >
@@ -328,33 +327,31 @@ const TransactionsHistory = ({ itemId = null }) => {
               <option value="transfer">Transfers</option>
             </select>
           </div>
-          
+
           {/* Date Range Filters */}
           <div className="flex space-x-2">
             <input
               type="date"
-              className={`w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                theme === 'dark' 
-                  ? 'bg-gray-700 border-gray-600 text-white' 
+              className={`w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === 'dark'
+                  ? 'bg-gray-700 border-gray-600 text-white'
                   : 'bg-white border-gray-300 text-gray-800'
-              }`}
+                }`}
               value={dateRange.start}
               onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
               placeholder="Start Date"
             />
             <input
               type="date"
-              className={`w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                theme === 'dark' 
-                  ? 'bg-gray-700 border-gray-600 text-white' 
+              className={`w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === 'dark'
+                  ? 'bg-gray-700 border-gray-600 text-white'
                   : 'bg-white border-gray-300 text-gray-800'
-              }`}
+                }`}
               value={dateRange.end}
               onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
               placeholder="End Date"
             />
           </div>
-          
+
           {/* Export Button */}
           <div className="flex justify-end">
             <button
@@ -367,7 +364,7 @@ const TransactionsHistory = ({ itemId = null }) => {
           </div>
         </div>
       </div>
-      
+
       {/* Transactions Table */}
       {loading ? (
         <div className="p-4 flex justify-center">
@@ -378,10 +375,9 @@ const TransactionsHistory = ({ itemId = null }) => {
           <table className={`min-w-full divide-y ${theme === 'dark' ? 'divide-gray-700' : 'divide-gray-200'}`}>
             <thead className={theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'}>
               <tr>
-                <th 
-                  className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer ${
-                    theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
-                  }`}
+                <th
+                  className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer ${theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
+                    }`}
                   onClick={() => handleSort('transaction_date')}
                 >
                   <div className="flex items-center">
@@ -389,10 +385,9 @@ const TransactionsHistory = ({ itemId = null }) => {
                   </div>
                 </th>
                 {!itemId && (
-                  <th 
-                    className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer ${
-                      theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
-                    }`}
+                  <th
+                    className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer ${theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
+                      }`}
                     onClick={() => handleSort('inventory_items.name')}
                   >
                     <div className="flex items-center">
@@ -400,60 +395,54 @@ const TransactionsHistory = ({ itemId = null }) => {
                     </div>
                   </th>
                 )}
-                <th 
-                  className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer ${
-                    theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
-                  }`}
+                <th
+                  className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer ${theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
+                    }`}
                   onClick={() => handleSort('transaction_type')}
                 >
                   <div className="flex items-center">
                     Type {getSortIcon('transaction_type')}
                   </div>
                 </th>
-                <th 
-                  className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer ${
-                    theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
-                  }`}
+                <th
+                  className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer ${theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
+                    }`}
                   onClick={() => handleSort('quantity')}
                 >
                   <div className="flex items-center">
                     Quantity {getSortIcon('quantity')}
                   </div>
                 </th>
-                <th 
-                  className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer ${
-                    theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
-                  }`}
+                <th
+                  className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer ${theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
+                    }`}
                   onClick={() => handleSort('unit_price')}
                 >
                   <div className="flex items-center">
                     Unit Price (₵) {getSortIcon('unit_price')}
                   </div>
                 </th>
-                <th 
-                  className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer ${
-                    theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
-                  }`}
+                <th
+                  className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer ${theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
+                    }`}
                   onClick={() => handleSort('total_price')}
                 >
                   <div className="flex items-center">
                     Total (₵) {getSortIcon('total_price')}
                   </div>
                 </th>
-                <th 
-                  className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer ${
-                    theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
-                  }`}
+                <th
+                  className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer ${theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
+                    }`}
                   onClick={() => handleSort('reference_number')}
                 >
                   <div className="flex items-center">
                     Reference {getSortIcon('reference_number')}
                   </div>
                 </th>
-                <th 
-                  className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer ${
-                    theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
-                  }`}
+                <th
+                  className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer ${theme === 'dark' ? 'text-gray-300' : 'text-gray-500'
+                    }`}
                   onClick={() => handleSort('department')}
                 >
                   <div className="flex items-center">
@@ -482,19 +471,18 @@ const TransactionsHistory = ({ itemId = null }) => {
                     {getTransactionTypeLabel(transaction.transaction_type)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`text-sm font-medium ${
-                      transaction.transaction_type === 'purchase' || 
-                      (transaction.transaction_type === 'adjustment' && transaction.quantity > 0)
+                    <span className={`text-sm font-medium ${transaction.transaction_type === 'purchase' ||
+                        (transaction.transaction_type === 'adjustment' && transaction.quantity > 0)
                         ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
-                        : transaction.transaction_type === 'consumption' || 
+                        : transaction.transaction_type === 'consumption' ||
                           (transaction.transaction_type === 'adjustment' && transaction.quantity < 0)
                           ? theme === 'dark' ? 'text-red-400' : 'text-red-600'
                           : theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    }`}>
-                      {transaction.transaction_type === 'purchase' || 
-                       (transaction.transaction_type === 'adjustment' && transaction.quantity > 0)
+                      }`}>
+                      {transaction.transaction_type === 'purchase' ||
+                        (transaction.transaction_type === 'adjustment' && transaction.quantity > 0)
                         ? '+'
-                        : transaction.transaction_type === 'consumption' || 
+                        : transaction.transaction_type === 'consumption' ||
                           (transaction.transaction_type === 'adjustment' && transaction.quantity < 0)
                           ? '-'
                           : ''}
@@ -511,7 +499,7 @@ const TransactionsHistory = ({ itemId = null }) => {
                     {transaction.reference_number || 'N/A'}
                   </td>
                   <td className={`px-6 py-4 whitespace-nowrap text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-500'}`}>
-                    {transaction.department || 'N/A'}
+                    {transaction.department || transaction.department_name || 'N/A'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex justify-center space-x-2">
@@ -579,22 +567,21 @@ const TransactionsHistory = ({ itemId = null }) => {
           readOnly={isViewMode}
         />
       )}
-      
+
       {/* Delete Confirmation Modal */}
       {isConfirmDeleteOpen && transactionToDelete && (
         <div className="fixed inset-0 z-50 overflow-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
           <div className={`relative w-full max-w-md ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'} rounded-lg shadow-lg p-6`}>
             <h2 className="text-xl font-bold mb-4">Confirm Delete</h2>
             <p className="mb-6">Are you sure you want to delete this transaction? This action cannot be undone.</p>
-            
+
             <div className="flex justify-end space-x-3">
               <button
                 onClick={closeAllModals}
-                className={`px-4 py-2 rounded-md ${
-                  theme === 'dark' 
-                    ? 'bg-gray-700 hover:bg-gray-600 text-white' 
+                className={`px-4 py-2 rounded-md ${theme === 'dark'
+                    ? 'bg-gray-700 hover:bg-gray-600 text-white'
                     : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
-                }`}
+                  }`}
               >
                 Cancel
               </button>

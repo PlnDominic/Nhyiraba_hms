@@ -103,18 +103,24 @@ const ProfileModal = ({ isOpen, onClose }) => {
     try {
       // Upload the image to Supabase Storage
       const fileExt = profileImage.name.split('.').pop();
-      const fileName = `${user.id}.${fileExt}`;
+      const fileName = `avatar-${user.id}-${Date.now()}.${fileExt}`;
+      const filePath = `public/${fileName}`;
       
       const { error: uploadError } = await supabase
         .storage
         .from('avatars')
-        .upload(fileName, profileImage, {
+        .upload(filePath, profileImage, {
           upsert: true,
           cacheControl: '3600',
           contentType: profileImage.type
         });
       
       if (uploadError) {
+        if (uploadError.message.includes('Bucket not found')) {
+          throw new Error('Storage bucket "avatars" not found. Please contact an administrator to set up storage.');
+        } else if (uploadError.message.includes('row-level security')) {
+          throw new Error('Upload denied by security policy. Please contact an administrator.');
+        }
         throw uploadError;
       }
       
@@ -122,13 +128,13 @@ const ProfileModal = ({ isOpen, onClose }) => {
       const { data } = await supabase
         .storage
         .from('avatars')
-        .getPublicUrl(fileName);
+        .getPublicUrl(filePath);
       
       return data.publicUrl;
     } catch (error) {
       console.error('Error uploading image:', error);
       setMessage({ 
-        text: 'Failed to upload image. Please try again.', 
+        text: error.message || 'Failed to upload image. Please try again.', 
         type: 'error' 
       });
       return null;

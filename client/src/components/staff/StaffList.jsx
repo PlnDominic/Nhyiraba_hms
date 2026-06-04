@@ -1,7 +1,7 @@
 import React from 'react';
 import { FaEdit, FaTrash, FaEye, FaCalendarCheck, FaChartLine } from 'react-icons/fa';
 
-const StaffList = ({ staff, onEdit, onDelete }) => {
+const StaffList = ({ staff, onEdit, onDelete, onViewDetails }) => {
   const getStatusBadgeClass = (status) => {
     switch (status) {
       case 'active':
@@ -111,6 +111,7 @@ const StaffList = ({ staff, onEdit, onDelete }) => {
                       <FaTrash size={18} />
                     </button>
                     <button
+                      onClick={() => onViewDetails(member)}
                       className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                       title="View Details"
                     >

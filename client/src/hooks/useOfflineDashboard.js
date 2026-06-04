@@ -113,27 +113,8 @@ const useOfflineDashboard = () => {
       setTasks(tasksData.slice(0, 5)); // Top 5 pending tasks
     } catch (err) {
       console.error('Failed to load tasks:', err);
-      // Set sample tasks for demonstration
-      setTasks([
-        {
-          id: 1,
-          title: 'Clean Room 101',
-          room: '101',
-          room_name: 'Mint',
-          assigned_to: 'Housekeeper',
-          status: 'Pending',
-          priority: 'High'
-        },
-        {
-          id: 2,
-          title: 'Maintenance Room 105',
-          room: '105',
-          room_name: 'Licorice',
-          assigned_to: 'Maintenance',
-          status: 'Pending',
-          priority: 'Medium'
-        }
-      ]);
+      // No mock data for production
+      setTasks([]);
     }
   };
 
@@ -150,17 +131,8 @@ const useOfflineDashboard = () => {
       
       setTotalRevenue(total);
       
-      // Generate sample revenue chart data (last 7 days)
-      const dates = [];
-      const values = [];
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        dates.push(date.toISOString().split('T')[0]);
-        values.push(Math.random() * 1000 + 500); // Sample data
-      }
-      
-      setRevenueData({ dates, values });
+      // No mock data for production
+      setRevenueData({ dates: [], values: [] });
     } catch (err) {
       console.error('Failed to load revenue data:', err);
       setTotalRevenue(0);
@@ -169,16 +141,12 @@ const useOfflineDashboard = () => {
 
   const loadRestaurantStats = async () => {
     try {
-      // Set sample restaurant stats (in real implementation, this would come from restaurant orders table)
+      // No mock data for production
       setRestaurantStats({
-        totalRevenue: 2450.75,
-        totalOrders: 45,
-        avgOrderValue: 54.46,
-        popularItems: [
-          { name: 'Jollof Rice', count: 12 },
-          { name: 'Grilled Chicken', count: 8 },
-          { name: 'Banku & Tilapia', count: 6 }
-        ]
+        totalRevenue: 0,
+        totalOrders: 0,
+        avgOrderValue: 0,
+        popularItems: []
       });
     } catch (err) {
       console.error('Failed to load restaurant stats:', err);

@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
+import { useUser } from '../../context/UserContext';
 import supabase from '../../supabaseClient';
 import { FaClipboardList, FaSearch, FaFilter, FaEye, FaPrint, FaUtensils, FaCheck, FaSync, FaPlus, FaChartLine, FaMoneyBillWave, FaShoppingCart, FaStar, FaTrash } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import OrderModal from './OrderModal';
 
-const OrderManagement = () => {
+const OrderManagement = ({ activeBar }) => {
   const { theme } = useTheme();
+  const { currentUser } = useUser();
   const [orders, setOrders] = useState([]);
+  
+  // Check if user is Food & Beverage staff
+  const isFoodBeverageStaff = currentUser?.department === 'Food & Beverage' || 
+                               currentUser?.department === 'Food Beverage';
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -30,7 +36,7 @@ const OrderManagement = () => {
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('restaurant_orders')
         .select(`
           *,
@@ -40,10 +46,16 @@ const OrderManagement = () => {
           )
         `)
         .order('created_at', { ascending: false });
-      
+
+      if (activeBar) {
+        query = query.eq('bar_location', activeBar);
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
       setOrders(data || []);
-      
+
       // Calculate statistics
       calculateStats(data || []);
     } catch (error) {
@@ -69,22 +81,22 @@ const OrderManagement = () => {
 
     // Filter orders based on date range
     const filteredOrders = filterOrdersByDateRange(ordersData, dateRange);
-    
+
     // Only consider completed orders for revenue calculation
-    const completedOrders = filteredOrders.filter(order => 
+    const completedOrders = filteredOrders.filter(order =>
       order.status === 'completed' || order.status === 'delivered'
     );
-    
+
     // Calculate total revenue
     const totalRevenue = completedOrders.reduce((sum, order) => {
       return sum + (parseFloat(order.total_amount) || 0);
     }, 0);
-    
+
     // Calculate average order value
-    const avgOrderValue = completedOrders.length > 0 
-      ? totalRevenue / completedOrders.length 
+    const avgOrderValue = completedOrders.length > 0
+      ? totalRevenue / completedOrders.length
       : 0;
-    
+
     // Find popular items
     const itemCounts = {};
     completedOrders.forEach(order => {
@@ -97,13 +109,13 @@ const OrderManagement = () => {
         });
       }
     });
-    
+
     // Convert to array and sort by count
     const popularItems = Object.entries(itemCounts)
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 5); // Top 5 items
-    
+
     setStatsData({
       totalRevenue,
       totalOrders: completedOrders.length,
@@ -119,7 +131,7 @@ const OrderManagement = () => {
     const startOfWeek = new Date(today);
     startOfWeek.setDate(today.getDate() - today.getDay()); // Start of week (Sunday)
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    
+
     switch (range) {
       case 'today':
         return ordersData.filter(order => {
@@ -151,30 +163,30 @@ const OrderManagement = () => {
   // Update order status
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
-      const updates = { 
-        status: newStatus, 
+      const updates = {
+        status: newStatus,
         updated_at: new Date(),
         completed_at: newStatus === 'completed' ? new Date() : null
       };
-      
+
       const { data, error } = await supabase
         .from('restaurant_orders')
         .update(updates)
         .eq('id', orderId)
         .select();
-      
+
       if (error) throw error;
-      
+
       // Update local state
-      setOrders(prev => 
+      setOrders(prev =>
         prev.map(order => order.id === orderId ? { ...order, ...updates } : order)
       );
-      
+
       // Recalculate statistics
-      calculateStats(orders.map(order => 
+      calculateStats(orders.map(order =>
         order.id === orderId ? { ...order, ...updates } : order
       ));
-      
+
       toast.success(`Order status updated to ${newStatus}`);
       return data[0];
     } catch (error) {
@@ -186,6 +198,12 @@ const OrderManagement = () => {
 
   // Delete order
   const deleteOrder = async (orderId) => {
+    // Security check: Prevent Food & Beverage staff from deleting orders
+    if (isFoodBeverageStaff) {
+      toast.error('You do not have permission to delete orders');
+      return;
+    }
+
     if (window.confirm('Are you sure you want to delete this order? This action cannot be undone.')) {
       try {
         // First delete order items
@@ -193,23 +211,23 @@ const OrderManagement = () => {
           .from('restaurant_order_items')
           .delete()
           .match({ order_id: orderId });
-        
+
         if (itemsError) throw itemsError;
-        
+
         // Then delete the order
         const { error } = await supabase
           .from('restaurant_orders')
           .delete()
           .match({ id: orderId });
-        
+
         if (error) throw error;
-        
+
         // Update local state
         setOrders(prev => prev.filter(order => order.id !== orderId));
-        
+
         // Recalculate statistics
         calculateStats(orders.filter(order => order.id !== orderId));
-        
+
         toast.success('Order deleted successfully');
       } catch (error) {
         console.error('Error deleting order:', error);
@@ -222,12 +240,12 @@ const OrderManagement = () => {
   const printOrder = (order) => {
     // Create a new window with order details for printing
     const printWindow = window.open('', '_blank');
-    
+
     if (!printWindow) {
       toast.error('Please allow pop-ups to print orders');
       return;
     }
-    
+
     // Format order items
     const itemsHtml = order.restaurant_order_items.map(item => {
       const itemName = item.restaurant_menu_items ? item.restaurant_menu_items.name : item.name;
@@ -240,7 +258,7 @@ const OrderManagement = () => {
         </tr>
       `;
     }).join('');
-    
+
     // Print document content
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -262,13 +280,14 @@ const OrderManagement = () => {
           </style>
         </head>
         <body>
-          <div class="hotel-name">Lavimac Royal Hotel</div>
+          <div class="hotel-name">Nhyiraba Hotel</div>
           <h1>Order Receipt</h1>
           <div class="order-details">
             <div><strong>Order ID:</strong> ${order.id}</div>
             <div><strong>Date:</strong> ${formatDate(order.created_at)}</div>
             <div><strong>Type:</strong> ${order.order_type.replace('-', ' ')}</div>
             <div><strong>Location:</strong> ${order.table_number ? `Table ${order.table_number}` : order.room_number ? `Room ${order.room_number}` : 'N/A'}</div>
+            <div><strong>Bar:</strong> ${order.bar_location || 'N/A'}</div>
             <div><strong>Status:</strong> ${order.status.charAt(0).toUpperCase() + order.status.slice(1)}</div>
           </div>
           
@@ -295,21 +314,21 @@ const OrderManagement = () => {
         </body>
       </html>
     `);
-    
+
     // Wait for content to load then print
     printWindow.document.close();
-    printWindow.onload = function() {
+    printWindow.onload = function () {
       printWindow.print();
       // printWindow.close(); // Uncomment to auto-close after print
     };
-    
+
     toast.success('Print preview generated');
   };
 
   // Initialize data
   useEffect(() => {
     fetchOrders();
-    
+
     // Set up real-time subscription for orders
     const orderSubscription = supabase
       .channel('restaurant_orders_changes')
@@ -332,7 +351,7 @@ const OrderManagement = () => {
     return () => {
       orderSubscription.unsubscribe();
     };
-  }, []);
+  }, [activeBar]); // Add activeBar as dependency
 
   // Update stats when date range changes
   useEffect(() => {
@@ -343,13 +362,13 @@ const OrderManagement = () => {
 
   // Filter orders based on search and filters
   const filteredOrders = orders.filter(order => {
-    const matchesSearch = searchTerm === '' || 
+    const matchesSearch = searchTerm === '' ||
       (order.id && order.id.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (order.room_number && order.room_number.toString().includes(searchTerm));
-    
+
     const matchesStatus = statusFilter === '' || order.status === statusFilter;
     const matchesOrderType = orderTypeFilter === '' || order.order_type === orderTypeFilter;
-    
+
     return matchesSearch && matchesStatus && matchesOrderType;
   });
 
@@ -419,23 +438,21 @@ const OrderManagement = () => {
         <div className="flex gap-2">
           <button
             onClick={openOrderModal}
-            className={`flex items-center justify-center px-4 py-2 rounded-lg shadow-sm transition-colors ${
-              theme === 'dark'
+            className={`flex items-center justify-center px-4 py-2 rounded-lg shadow-sm transition-colors ${theme === 'dark'
                 ? 'bg-blue-600 hover:bg-blue-700 text-white'
                 : 'bg-blue-500 hover:bg-blue-600 text-white'
-            }`}
+              }`}
           >
             <FaPlus className="mr-2" />
             Add Order
           </button>
-          
+
           <button
             onClick={() => setShowStatsDashboard(!showStatsDashboard)}
-            className={`flex items-center justify-center px-4 py-2 rounded-lg shadow-sm transition-colors ${
-              theme === 'dark'
+            className={`flex items-center justify-center px-4 py-2 rounded-lg shadow-sm transition-colors ${theme === 'dark'
                 ? 'bg-gray-700 hover:bg-gray-600 text-white'
                 : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
-            }`}
+              }`}
           >
             <FaChartLine className="mr-2" />
             {showStatsDashboard ? 'Hide Stats' : 'Show Stats'}
@@ -446,31 +463,29 @@ const OrderManagement = () => {
       {/* Search and filter controls */}
       <div className="flex flex-wrap gap-4 mb-6">
         <div className={`flex-1 min-w-[300px] relative ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
-          <FaSearch 
-            className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" 
+          <FaSearch
+            className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
           />
           <input
             type="text"
             placeholder="Search orders..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className={`w-full pl-10 pr-4 py-2 rounded-lg ${
-              theme === 'dark'
+            className={`w-full pl-10 pr-4 py-2 rounded-lg ${theme === 'dark'
                 ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500'
                 : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400'
-            } border focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors`}
+              } border focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors`}
           />
         </div>
-        
+
         <div className="flex-1 min-w-[200px]">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className={`w-full px-4 py-2 rounded-lg appearance-none ${
-              theme === 'dark'
+            className={`w-full px-4 py-2 rounded-lg appearance-none ${theme === 'dark'
                 ? 'bg-gray-800 border-gray-700 text-white'
                 : 'bg-white border-gray-300 text-gray-800'
-            } border focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors`}
+              } border focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors`}
           >
             <option value="">All Statuses</option>
             <option value="pending">Pending</option>
@@ -481,16 +496,15 @@ const OrderManagement = () => {
             <option value="cancelled">Cancelled</option>
           </select>
         </div>
-        
+
         <div className="flex-1 min-w-[200px]">
           <select
             value={orderTypeFilter}
             onChange={(e) => setOrderTypeFilter(e.target.value)}
-            className={`w-full px-4 py-2 rounded-lg appearance-none ${
-              theme === 'dark'
+            className={`w-full px-4 py-2 rounded-lg appearance-none ${theme === 'dark'
                 ? 'bg-gray-800 border-gray-700 text-white'
                 : 'bg-white border-gray-300 text-gray-800'
-            } border focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors`}
+              } border focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors`}
           >
             <option value="">All Order Types</option>
             <option value="dine-in">Dine-in</option>
@@ -498,20 +512,19 @@ const OrderManagement = () => {
             <option value="takeaway">Takeaway</option>
           </select>
         </div>
-        
+
         <button
           onClick={fetchOrders}
-          className={`px-4 py-2 rounded-lg flex items-center ${
-            theme === 'dark' 
-              ? 'bg-gray-700 hover:bg-gray-600 text-white' 
+          className={`px-4 py-2 rounded-lg flex items-center ${theme === 'dark'
+              ? 'bg-gray-700 hover:bg-gray-600 text-white'
               : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
-          }`}
+            }`}
         >
           <FaSync className="mr-2" />
           Refresh
         </button>
       </div>
-      
+
       {/* Orders list */}
       {loading ? (
         <div className="flex justify-center items-center p-12">
@@ -554,21 +567,20 @@ const OrderManagement = () => {
             </thead>
             <tbody className={`divide-y ${theme === 'dark' ? 'divide-gray-700' : 'divide-gray-200'}`}>
               {filteredOrders.map(order => (
-                <tr 
-                  key={order.id} 
+                <tr
+                  key={order.id}
                   className={theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'}
                 >
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     {order.id.slice(0, 8)}...
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      order.order_type === 'dine-in'
+                    <span className={`px-2 py-1 text-xs rounded-full ${order.order_type === 'dine-in'
                         ? theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-800'
                         : order.order_type === 'room-service'
-                        ? theme === 'dark' ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-800'
-                        : theme === 'dark' ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-800'
-                    }`}>
+                          ? theme === 'dark' ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-800'
+                          : theme === 'dark' ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-800'
+                      }`}>
                       {order.order_type.replace('-', ' ')}
                     </span>
                   </td>
@@ -593,9 +605,8 @@ const OrderManagement = () => {
                     <div className="flex space-x-2">
                       <button
                         onClick={() => viewOrderDetails(order)}
-                        className={`p-2 rounded-full ${
-                          theme === 'dark' ? 'hover:bg-gray-600' : 'hover:bg-gray-200'
-                        }`}
+                        className={`p-2 rounded-full ${theme === 'dark' ? 'hover:bg-gray-600' : 'hover:bg-gray-200'
+                          }`}
                         title="View Details"
                       >
                         <FaEye />
@@ -608,36 +619,37 @@ const OrderManagement = () => {
                             'ready': 'delivered',
                             'delivered': 'completed'
                           }[order.status];
-                          
+
                           if (nextStatus) {
                             updateOrderStatus(order.id, nextStatus);
                           }
                         }}
                         disabled={!['pending', 'preparing', 'ready', 'delivered'].includes(order.status)}
-                        className={`p-2 rounded-full ${
-                          ['pending', 'preparing', 'ready', 'delivered'].includes(order.status)
+                        className={`p-2 rounded-full ${['pending', 'preparing', 'ready', 'delivered'].includes(order.status)
                             ? theme === 'dark' ? 'hover:bg-gray-600 text-green-400' : 'hover:bg-gray-200 text-green-600'
                             : theme === 'dark' ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 cursor-not-allowed'
-                        }`}
+                          }`}
                         title="Advance Status"
                       >
                         <FaCheck />
                       </button>
                       <button
                         onClick={() => printOrder(order)}
-                        className={`p-2 rounded-full ${
-                          theme === 'dark' ? 'hover:bg-gray-600 text-blue-400' : 'hover:bg-gray-200 text-blue-600'
-                        }`}
+                        className={`p-2 rounded-full ${theme === 'dark' ? 'hover:bg-gray-600 text-blue-400' : 'hover:bg-gray-200 text-blue-600'
+                          }`}
                         title="Print Order"
                       >
                         <FaPrint />
                       </button>
                       <button
                         onClick={() => deleteOrder(order.id)}
+                        disabled={isFoodBeverageStaff}
                         className={`p-2 rounded-full ${
-                          theme === 'dark' ? 'hover:bg-gray-600 text-red-400' : 'hover:bg-gray-200 text-red-600'
+                          isFoodBeverageStaff
+                            ? theme === 'dark' ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 cursor-not-allowed'
+                            : theme === 'dark' ? 'hover:bg-gray-600 text-red-400' : 'hover:bg-gray-200 text-red-600'
                         }`}
-                        title="Delete Order"
+                        title={isFoodBeverageStaff ? "Delete not allowed for Food & Beverage staff" : "Delete Order"}
                       >
                         <FaTrash />
                       </button>
@@ -657,9 +669,10 @@ const OrderManagement = () => {
       )}
 
       {/* OrderModal for adding new orders */}
-      <OrderModal 
+      <OrderModal
         isOpen={isOrderModalOpen}
         onClose={closeOrderModal}
+        activeBar={activeBar}
       />
     </div>
   );

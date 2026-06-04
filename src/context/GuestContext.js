@@ -144,20 +144,35 @@ export const GuestProvider = ({ children }) => {
 
     const addGuestToList = async (newGuest) => {
         console.log('Starting addGuestToList with data:', newGuest);
-        
-        // Format data for database
+
+        const parseDate = (value) => {
+            if (!value) return null;
+            const dateObj = value instanceof Date ? value : new Date(value);
+            return isNaN(dateObj.getTime()) ? null : dateObj;
+        };
+
+        const checkInDateObj = parseDate(newGuest.checkIn || newGuest.checkInDate || newGuest.check_in);
+        const fallbackCheckIn = checkInDateObj || new Date();
+        const providedCheckOut = parseDate(newGuest.checkOut || newGuest.checkOutDate || newGuest.check_out);
+        const adjustedCheckOut = providedCheckOut && (!checkInDateObj || providedCheckOut > checkInDateObj)
+            ? providedCheckOut
+            : new Date(fallbackCheckIn.getTime() + 86400000);
+        const calculatedNights = Math.max(1, Math.ceil((adjustedCheckOut - fallbackCheckIn) / 86400000));
+        const nights = newGuest.nights && Number.isFinite(newGuest.nights)
+            ? Math.max(1, Math.floor(newGuest.nights))
+            : calculatedNights;
+
         const guestData = {
             name: newGuest.name,
             email: newGuest.email || null,
             phone: newGuest.phone || null,
             room: newGuest.room,
-            // Ensure proper date formatting for ISO string conversion
-            check_in: newGuest.checkIn ? new Date(newGuest.checkIn).toISOString() : new Date().toISOString(),
-            check_out: newGuest.checkOut ? new Date(newGuest.checkOut).toISOString() : new Date(Date.now() + 86400000 * 3).toISOString(),
-            status: 'Checked In',
+            check_in: fallbackCheckIn.toISOString(),
+            check_out: adjustedCheckOut.toISOString(),
+            status: newGuest.status || 'Checked In',
             first_name: newGuest.firstName || null,
             last_name: newGuest.lastName || null,
-            date_of_birth: newGuest.dateOfBirth || null,
+            date_of_birth: newGuest.dateOfBirth ? new Date(newGuest.dateOfBirth).toISOString() : null,
             gender: newGuest.gender || null,
             nationality: newGuest.nationality || null,
             region: newGuest.region || null,
@@ -179,32 +194,28 @@ export const GuestProvider = ({ children }) => {
             
             if (data) {
                 console.log('Guest successfully created in database with data:', data);
-                // Generate default preferences for the new guest
                 const preferences = generateDefaultPreferences({ 
                     ...data, 
                     name: guestData.name, 
                     room: guestData.room 
                 });
-                
-                // Update local state with the new guest - use ISO date objects
+
                 const guestWithId = {
                     ...newGuest,
                     id: data.id,
-                    // Properly format dates for the UI
                     checkIn: data.check_in,
                     checkOut: data.check_out,
+                    nights,
                     preferences
                 };
-                
+
                 setGuestList(prevGuestList => [...prevGuestList, guestWithId]);
-                
-                // Add to recent activity
+
                 addToRecentActivity(`${guestWithId.name} checked into Room ${guestWithId.room}`);
-                
-                // Update room status to 'Occupied'
+
                 console.log(`Updating room ${newGuest.room} status to Occupied`);
                 await updateRoomStatus(newGuest.room, 'Occupied');
-                
+
                 console.log('Guest added successfully with ID:', data.id);
                 return guestWithId;
             } else {
@@ -217,13 +228,15 @@ export const GuestProvider = ({ children }) => {
             const guestWithId = {
                 ...newGuest,
                 id: Date.now().toString(),
+                nights,
+                checkIn: fallbackCheckIn.toISOString(),
+                checkOut: adjustedCheckOut.toISOString(),
                 preferences: generateDefaultPreferences(newGuest)
             };
             
             console.log('Using fallback local state with generated ID:', guestWithId.id);
             setGuestList(prevGuestList => [...prevGuestList, guestWithId]);
             
-            // Add to recent activity
             addToRecentActivity(`${guestWithId.name} checked into Room ${guestWithId.room}`);
             
             // Still try to update room status

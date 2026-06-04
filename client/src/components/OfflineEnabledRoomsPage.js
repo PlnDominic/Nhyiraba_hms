@@ -121,7 +121,7 @@ const OfflineEnabledRoomsPage = () => {
     }
     
     let filtered = [...rooms];
-    filtered = filtered.filter(room => room && room.id >= 101 && room.id <= 109);
+    filtered = filtered.filter(room => room && room.id >= 1 && room.id <= 15);
     filtered = filtered.sort((a, b) => a.id - b.id);
     
     if (activeFilter !== 'all') {
@@ -360,11 +360,7 @@ const OfflineEnabledRoomsPage = () => {
             
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-6">
               {filteredRooms.map((room) => {
-                const priceDisplay = 
-                  room.type === 'Standard' ? 'GH₵400' :
-                  room.type === 'Superior' ? 'GH₵700' :
-                  room.type === 'Executive' ? 'GH₵1,250' :
-                  `GH₵${room.price || 0}`;
+                const priceDisplay = `GH₵${room.price || 0}`;
 
                 return (
                   <div

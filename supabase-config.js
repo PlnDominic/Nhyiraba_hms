@@ -1,5 +1,5 @@
 // Supabase Configuration
-// This file contains the Supabase configuration for the Lavimac HMS project
+// This file contains the Supabase configuration for the Nhyiraba HMS project
 // You can import this file to use the configuration in your scripts
 
 const SUPABASE_CONFIG = {

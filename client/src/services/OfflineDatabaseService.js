@@ -150,27 +150,8 @@ class OfflineDatabaseService {
    * Insert default room data
    */
   async _insertDefaultData() {
-    const rooms = [
-      { room_number: 'Mint', room_type: 'Standard', price: 150.00, description: 'Cozy standard room with mint green decor' },
-      { room_number: 'Cinnamon', room_type: 'Standard', price: 150.00, description: 'Warm standard room with cinnamon brown tones' },
-      { room_number: 'Basil', room_type: 'Standard', price: 150.00, description: 'Fresh standard room with basil green accents' },
-      { room_number: 'Licorice', room_type: 'Deluxe', price: 200.00, description: 'Elegant deluxe room with dark sophisticated styling' },
-      { room_number: 'Marigold', room_type: 'Deluxe', price: 200.00, description: 'Bright deluxe room with golden marigold themes' },
-      { room_number: 'Lotus', room_type: 'Suite', price: 300.00, description: 'Luxurious suite with lotus-inspired zen design' },
-      { room_number: 'Jasmine', room_type: 'Suite', price: 300.00, description: 'Premium suite with jasmine white and gold accents' },
-      { room_number: 'Private', room_type: 'Private', price: 500.00, description: 'Exclusive private room with premium amenities' },
-      { room_number: 'Chamomile', room_type: 'Standard', price: 150.00, description: 'Relaxing standard room with chamomile yellow tones' }
-    ];
-
-    for (const room of rooms) {
-      const amenities = JSON.stringify(['WiFi', 'TV', 'Air Conditioning', 'Mini Bar']);
-      const stmt = this.db.prepare(`
-        INSERT OR IGNORE INTO rooms (room_number, room_type, price_per_night, amenities, description, status)
-        VALUES (?, ?, ?, ?, ?, 'Available')
-      `);
-      stmt.run([room.room_number, room.room_type, room.price, amenities, room.description]);
-      stmt.free();
-    }
+    // No mock data for production - rooms will be loaded from Supabase
+    console.log('Production mode: No mock data inserted');
   }
 
   /**

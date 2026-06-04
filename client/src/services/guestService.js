@@ -11,14 +11,14 @@ export const testSupabaseConnection = async () => {
     // First, check if the Supabase URL is reachable at all
     const projectUrl = supabase.supabaseUrl;
     let pingResult = null;
-    
+
     try {
       console.log('Pinging Supabase endpoint:', projectUrl);
-      
+
       // Try a simple fetch with a timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
-      
+
       const response = await fetch(`${projectUrl}/rest/v1/`, {
         method: 'GET',
         headers: {
@@ -27,18 +27,18 @@ export const testSupabaseConnection = async () => {
         },
         signal: controller.signal
       });
-      
+
       clearTimeout(timeoutId);
       pingResult = {
         success: response.status >= 200 && response.status < 300,
         status: response.status,
         statusText: response.statusText
       };
-      
+
       console.log('Ping result:', pingResult);
     } catch (pingError) {
       console.error('Error pinging Supabase:', pingError);
-      
+
       // Specific handling for "Failed to fetch" error
       if (pingError.message === 'Failed to fetch') {
         return {
@@ -64,13 +64,13 @@ export const testSupabaseConnection = async () => {
           }
         };
       }
-      
+
       pingResult = {
         success: false,
         error: pingError.message
       };
     }
-    
+
     // If basic ping failed and couldn't be reached at all, don't continue with other tests
     if (pingResult && !pingResult.success) {
       return {
@@ -80,9 +80,9 @@ export const testSupabaseConnection = async () => {
         pingResult
       };
     }
-    
+
     // Continue with the regular tests as before...
-    
+
     // First, try a more reliable way to test if we can connect to Supabase
     // Using the system schema instead of a public table that might not exist
     const { error: schemaError } = await supabase
@@ -90,7 +90,7 @@ export const testSupabaseConnection = async () => {
       .select('nspname')
       .limit(1)
       .single();
-    
+
     // If we get a specific error about permissions, that's actually good - it means we connected
     // but don't have access to system tables (which is normal for most users)
     if (schemaError && schemaError.code === '42501') {
@@ -99,7 +99,7 @@ export const testSupabaseConnection = async () => {
     } else if (schemaError && schemaError.code !== 'PGRST116') {
       // Try a different approach - get server version
       const { data, error: versionError } = await supabase.rpc('get_server_version');
-      
+
       if (versionError && versionError.code !== 'PGRST116') {
         // Try direct fetch to test if API is reachable
         try {
@@ -124,16 +124,16 @@ export const testSupabaseConnection = async () => {
         }
       }
     }
-    
+
     console.log('Basic connection successful');
-    
+
     // Now check if guests table exists and is accessible
     try {
       const { data, error: guestsError } = await supabase
         .from('guests')
         .select('count')
         .limit(1);
-      
+
       if (guestsError) {
         if (guestsError.code === 'PGRST116' || guestsError.code === '42P01') {
           console.error('Guests table does not exist:', guestsError);
@@ -154,7 +154,7 @@ export const testSupabaseConnection = async () => {
           };
         }
       }
-      
+
       return {
         success: true,
         message: 'Successfully connected to Supabase and accessed guests table',
@@ -173,11 +173,11 @@ export const testSupabaseConnection = async () => {
     }
   } catch (e) {
     console.error('Exception testing connection:', e);
-    
+
     // Provide more helpful messages for common errors
     let errorMessage = e.message;
     let details = {};
-    
+
     if (e.message === 'Failed to fetch') {
       errorMessage = 'Network error: Failed to establish connection to Supabase';
       details = {
@@ -201,7 +201,7 @@ export const testSupabaseConnection = async () => {
         ]
       };
     }
-    
+
     return {
       success: false,
       message: `Connection test exception: ${errorMessage}`,
@@ -215,75 +215,85 @@ export const testSupabaseConnection = async () => {
 export const getGuests = async () => {
   try {
     console.log('Fetching all guests from Supabase');
-    
+
     // First, fetch all guests with basic information
     const { data: guestsData, error } = await supabase
       .from('guests')
       .select('*')
       .order('created_at', { ascending: false });
-    
+
     if (error) {
       console.error('Supabase Error fetching guests:', error);
       throw error;
     }
-    
+
     // Now, fetch room data to get room names
     if (guestsData && guestsData.length > 0) {
       try {
         console.log('Fetching rooms data for guest room name lookup');
-        
+
         // Get all rooms data in one query
         const { data: roomsData, error: roomsError } = await supabase
           .from('rooms')
           .select('*');
-        
+
         if (roomsError) {
           console.warn('Error fetching room data:', roomsError);
         } else if (roomsData && roomsData.length > 0) {
           console.log('Retrieved rooms data:', roomsData);
-          
+
           // Create a map of room id/number to room name for faster lookup
           const roomMap = {};
           roomsData.forEach(room => {
-            roomMap[room.id] = room.name || room.room_number;
-            
-            // Also map the room number as string to the room name
-            if (room.id !== undefined && room.id !== null) {
-              roomMap[String(room.id)] = room.name || room.room_number;
-            }
-            
-            // Direct room number lookup
+            // Use room_number as the display name (since our rooms are numbered 01-16)
+            const displayName = `Room ${room.room_number}`;
+
+            // Map by room ID
+            roomMap[room.id] = displayName;
+            roomMap[String(room.id)] = displayName;
+
+            // Map by room number
             if (room.room_number) {
-              roomMap[room.room_number] = room.name || room.room_number;
+              roomMap[room.room_number] = displayName;
+              roomMap[String(room.room_number)] = displayName;
+            }
+
+            // Also handle numeric room numbers
+            const numericRoom = parseInt(room.room_number);
+            if (!isNaN(numericRoom)) {
+              roomMap[numericRoom] = displayName;
+              roomMap[String(numericRoom)] = displayName;
             }
           });
-          
+
           console.log('Room mapping created:', roomMap);
-          
+
           // Add room_name to each guest based on their room assignment
           guestsData.forEach(guest => {
             if (guest.room) {
               // Try to find the room in our map
               const roomName = roomMap[guest.room];
-              
+
               if (roomName) {
                 console.log(`Setting room_name for guest ${guest.name}: ${roomName}`);
                 guest.room_name = roomName;
               } else {
                 // Direct lookup if mapping fails
                 const directRoom = roomsData.find(
-                  r => r.id === guest.room || 
-                       String(r.id) === String(guest.room) || 
-                       r.room_number === guest.room
+                  r => r.id === guest.room ||
+                    String(r.id) === String(guest.room) ||
+                    r.room_number === guest.room
                 );
-                
+
                 if (directRoom) {
-                  console.log(`Direct lookup for guest ${guest.name} found room: ${directRoom.name || directRoom.room_number}`);
-                  guest.room_name = directRoom.name || directRoom.room_number;
+                  const displayName = `Room ${directRoom.room_number}`;
+                  console.log(`Direct lookup for guest ${guest.name} found room: ${displayName}`);
+                  guest.room_name = displayName;
                 } else {
-                  // Just use the room value itself
-                  console.log(`Using direct room value for guest ${guest.name}: ${guest.room}`);
-                  guest.room_name = guest.room;
+                  // Just use the room value itself with Room prefix
+                  const fallbackName = `Room ${guest.room}`;
+                  console.log(`Using direct room value for guest ${guest.name}: ${fallbackName}`);
+                  guest.room_name = fallbackName;
                 }
               }
             }
@@ -294,7 +304,7 @@ export const getGuests = async () => {
         // Continue with guests data even if room names couldn't be fetched
       }
     }
-    
+
     // Debug output
     if (guestsData && guestsData.length > 0) {
       console.log('Guest room names after processing:');
@@ -302,7 +312,7 @@ export const getGuests = async () => {
         console.log(`Guest ${guest.name}: room=${guest.room}, room_name=${guest.room_name || 'not set'}`);
       });
     }
-    
+
     console.log(`Successfully fetched ${guestsData?.length || 0} guests from Supabase`);
     return { data: guestsData, error: null };
   } catch (error) {
@@ -320,9 +330,9 @@ export const getGuestById = async (id) => {
       .select('*')
       .eq('id', id)
       .single();
-    
+
     if (error) throw error;
-    
+
     // If the guest has a room assignment, get the room name
     if (data && data.room) {
       try {
@@ -330,31 +340,31 @@ export const getGuestById = async (id) => {
         const { data: roomsData, error: roomsError } = await supabase
           .from('rooms')
           .select('*');
-        
+
         if (!roomsError && roomsData && roomsData.length > 0) {
           // Try direct matching
           const matchingRoom = roomsData.find(
-            r => r.id === data.room || 
-                 String(r.id) === String(data.room) || 
-                 r.room_number === data.room
+            r => r.id === data.room ||
+              String(r.id) === String(data.room) ||
+              r.room_number === data.room
           );
-          
+
           if (matchingRoom) {
-            data.room_name = matchingRoom.name || matchingRoom.room_number;
+            data.room_name = `Room ${matchingRoom.room_number}`;
             console.log(`Found room name for guest ${id}: ${data.room_name}`);
           } else {
             // Fallback to using the room value itself
-            data.room_name = data.room;
-            console.log(`Using room value directly for guest ${id}: ${data.room}`);
+            data.room_name = `Room ${data.room}`;
+            console.log(`Using room value directly for guest ${id}: ${data.room_name}`);
           }
         }
       } catch (roomError) {
         console.warn(`Error fetching room name for guest ${id}:`, roomError);
         // Continue without room name, but set it to the room value itself
-        data.room_name = data.room;
+        data.room_name = `Room ${data.room}`;
       }
     }
-    
+
     return { data, error: null };
   } catch (error) {
     console.error(`Error fetching guest with ID ${id}:`, error);
@@ -366,21 +376,22 @@ export const getGuestById = async (id) => {
 export const createGuest = async (guestData) => {
   try {
     console.log('Attempting to create guest in Supabase:', guestData);
-    
+
     const { data, error } = await supabase
       .from('guests')
       .insert([guestData])
       .select();
-    
+
     if (error) {
-      console.error('Supabase Error creating guest:', error);
+      console.error('Supabase Error creating guest:', JSON.stringify(error, null, 2));
       throw error;
     }
-    
+
     console.log('Guest created successfully in Supabase:', data);
     return { data: data[0], error: null };
   } catch (error) {
     console.error('Exception creating guest:', error);
+    console.error('Exception details:', JSON.stringify(error, null, 2));
     return { data: null, error };
   }
 };
@@ -393,9 +404,9 @@ export const updateGuest = async (id, updates) => {
       .update(updates)
       .eq('id', id)
       .select();
-    
+
     if (error) throw error;
-    
+
     return { data: data[0], error: null };
   } catch (error) {
     console.error(`Error updating guest with ID ${id}:`, error);
@@ -410,9 +421,9 @@ export const deleteGuest = async (id) => {
       .from('guests')
       .delete()
       .eq('id', id);
-    
+
     if (error) throw error;
-    
+
     return { success: true, error: null };
   } catch (error) {
     console.error(`Error deleting guest with ID ${id}:`, error);
@@ -429,38 +440,39 @@ export const getGuestsByRoom = async (roomNumber) => {
       .select('*')
       .eq('room', roomNumber)
       .order('check_in', { ascending: true });
-    
+
     if (error) throw error;
-    
+
     // Get the room name
     if (data && data.length > 0) {
       try {
         const { data: roomsData, error: roomsError } = await supabase
           .from('rooms')
           .select('*');
-        
+
         if (!roomsError && roomsData && roomsData.length > 0) {
           // Find the matching room
           const matchingRoom = roomsData.find(
-            r => r.id === roomNumber || 
-                 String(r.id) === String(roomNumber) || 
-                 r.room_number === roomNumber
+            r => r.id === roomNumber ||
+              String(r.id) === String(roomNumber) ||
+              r.room_number === roomNumber
           );
-          
+
           if (matchingRoom) {
             // Add room_name to all guests from this room
-            const roomName = matchingRoom.name || matchingRoom.room_number;
+            const roomName = `Room ${matchingRoom.room_number}`;
             console.log(`Found room name for room ${roomNumber}: ${roomName}`);
-            
+
             // Update all guests
             data.forEach(guest => {
               guest.room_name = roomName;
             });
           } else {
             // Fallback to using the room number itself
-            console.log(`Using room number directly for ${roomNumber}`);
+            const fallbackName = `Room ${roomNumber}`;
+            console.log(`Using room number directly for ${roomNumber}: ${fallbackName}`);
             data.forEach(guest => {
-              guest.room_name = String(roomNumber);
+              guest.room_name = fallbackName;
             });
           }
         }
@@ -468,11 +480,11 @@ export const getGuestsByRoom = async (roomNumber) => {
         console.warn(`Error fetching room name for room ${roomNumber}:`, roomError);
         // Continue without room names, but set them to the room number
         data.forEach(guest => {
-          guest.room_name = String(roomNumber);
+          guest.room_name = `Room ${roomNumber}`;
         });
       }
     }
-    
+
     return { data, error: null };
   } catch (error) {
     console.error(`Error fetching guests for room ${roomNumber}:`, error);

@@ -1,9 +1,17 @@
 {
+  "name": "nhyiraba-hms",
+  "version": "1.0.0",
+  "private": true,
   "dependencies": {
+    "@fortawesome/fontawesome-free": "^7.0.0",
+    "@fortawesome/fontawesome-svg-core": "^7.0.0",
+    "@fortawesome/free-regular-svg-icons": "^7.0.0",
+    "@fortawesome/free-solid-svg-icons": "^7.0.0",
     "@supabase/supabase-js": "^2.49.3",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "node-fetch": "^2.7.0"
+    "node-fetch": "^2.7.0",
+    "nodemailer": "^6.10.1"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.20",
@@ -12,6 +20,9 @@
     "tailwindcss": "^4.0.12"
   },
   "scripts": {
-    "dev": "concurrently \"node server.js\" \"cd client && npm run react-start\""
+    "dev": "concurrently \"node server.js\" \"cd client && npm run react-start\"",
+    "build": "node build.js",
+    "vercel-build": "node build.js",
+    "setup:storage": "node scripts/create_avatars_bucket.js"
   }
 }

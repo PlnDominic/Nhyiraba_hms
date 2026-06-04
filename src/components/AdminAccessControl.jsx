@@ -7,9 +7,6 @@ import { createUserAccount, getAllUsers } from '../services/userService';
 import { useUser } from '../context/UserContext';
 import { usePermission } from '../hooks/usePermission';
 import supabase from '../supabaseClient';
-// Import debug script
-import '../debug_requests'; // Debug access requests
-import '../create_test_request'; // Create test request
 
 const AdminAccessControl = ({ children, requiredRole = 'admin' }) => {
   const { user } = useUser();

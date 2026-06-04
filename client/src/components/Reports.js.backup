@@ -1,0 +1,771 @@
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import * as echarts from 'echarts';
+import { useTheme } from '../context/ThemeContext';
+import { useRoomReservation } from '../context/RoomReservationContext';
+import DashboardLayout from './DashboardLayout';
+import { saveAs } from 'file-saver';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { format, subDays, parseISO, isToday, isAfter, isBefore, addDays, differenceInDays } from 'date-fns';
+import * as XLSX from 'xlsx';
+import supabase from '../supabaseClient';
+import { FaFilePdf, FaFileExcel, FaFileCsv, FaEye, FaShareAlt, FaDownload, FaEnvelope, FaLink, FaTimesCircle } from 'react-icons/fa';
+import { v4 as uuidv4 } from 'uuid';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import { useUser } from '../context/UserContext';
+import { generateBoardReportDirectly } from './BoardLevelReport';
+
+// Simple Toast Notification Component
+const Toast = ({ message, type, onClose }) => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onClose();
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  const bgColor = type === 'success' ? 'bg-green-500' :
+    type === 'error' ? 'bg-red-500' :
+      'bg-blue-500';
+
+  return (
+    <div className={`fixed top-4 right-4 z-50 ${bgColor} text-white p-3 rounded-lg shadow-lg flex items-center min-w-[300px]`}>
+      <div className="flex-1">{message}</div>
+      <button onClick={onClose} className="ml-3 text-white hover:text-gray-200">
+        <i className="fas fa-times"></i>
+      </button>
+    </div>
+  );
+};
+
+// Modal component for previewing and sharing reports
+const ReportModal = ({
+  isOpen,
+  onClose,
+  title,
+  content,
+  reportData,
+  reportType,
+  darkMode,
+  initialTab = 'preview',
+  hotelConfig,
+  hotelLogo,
+  coverImage,
+  highlightMetrics = []
+}) => {
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const [shareEmail, setShareEmail] = useState('');
+  const [shareLink, setShareLink] = useState('');
+  const [isLinkCopied, setIsLinkCopied] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && reportData) {
+      const dummyLink = `https://www.nhyirabahotel.com/reports/${reportData.id || 'preview'}`;
+      setShareLink(dummyLink);
+    }
+  }, [isOpen, reportData]);
+
+  if (!isOpen) return null;
+
+  const handleEmailShare = (e) => {
+    e.preventDefault();
+    if (shareEmail) {
+      const subject = encodeURIComponent(`Nhyiraba Hotel Report: ${reportData?.name || 'Report'}`);
+      const body = encodeURIComponent(`Here is the ${reportData?.name || 'report'} you requested. Access it at: ${shareLink}`);
+      window.open(`mailto:${shareEmail}?subject=${subject}&body=${body}`);
+      setShareEmail('');
+    }
+  };
+
+  const copyLinkToClipboard = () => {
+    navigator.clipboard.writeText(shareLink).then(() => {
+      setIsLinkCopied(true);
+      setTimeout(() => setIsLinkCopied(false), 2000);
+    });
+  };
+
+  const formatLabel = (reportData?.format || reportType || 'PDF').toString().toUpperCase();
+  const isPdfFormat = formatLabel === 'PDF';
+  const previewSource = isPdfFormat
+    ? reportData?.fileContent || reportData?.previewData
+    : reportData?.previewData || reportData?.fileContent;
+  const metadata = [
+    { label: 'Generated', value: reportData?.date ? new Date(reportData.date).toLocaleString() : null },
+    { label: 'Prepared By', value: reportData?.generatedBy },
+    { label: 'Format', value: formatLabel },
+    { label: 'Filename', value: reportData?.filename }
+  ].filter(item => item.value);
+
+  const accentGradient = darkMode
+    ? 'from-indigo-900/60 via-slate-900 to-slate-950'
+    : 'from-indigo-100 via-white to-slate-50';
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-auto bg-black/60 backdrop-blur-sm flex items-center justify-center">
+      <div className={`relative w-11/12 max-w-5xl rounded-3xl shadow-[0_40px_80px_-60px_rgba(15,23,42,0.9)] ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'} overflow-hidden m-4`}>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold sr-only">{title}</h2>
+          <button onClick={onClose} className={`${darkMode ? 'text-white/60 hover:text-white/90' : 'text-slate-500 hover:text-slate-700'} transition`}
+            aria-label="Close modal">
+            <FaTimesCircle size={20} />
+          </button>
+        </div>
+        <div className="px-6">
+          <div className="flex border-b border-white/10 mb-6">
+            <button
+              className={`py-2 px-4 text-sm font-semibold transition ${activeTab === 'preview' ? (darkMode ? 'text-indigo-300 border-b-2 border-indigo-400' : 'text-indigo-600 border-b-2 border-indigo-500') : (darkMode ? 'text-slate-400' : 'text-slate-500')}`}
+              onClick={() => setActiveTab('preview')}
+            >
+              Preview
+            </button>
+            <button
+              className={`py-2 px-4 text-sm font-semibold transition ${activeTab === 'share' ? (darkMode ? 'text-indigo-300 border-b-2 border-indigo-400' : 'text-indigo-600 border-b-2 border-indigo-500') : (darkMode ? 'text-slate-400' : 'text-slate-500')}`}
+              onClick={() => setActiveTab('share')}
+            >
+              Share
+            </button>
+          </div>
+        </div>
+
+        {activeTab === 'preview' && (
+          <div className="px-6 pb-6 space-y-6" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+            {/* Preview Content */}
+            {previewSource && isPdfFormat ? (
+              <div className={`rounded-3xl border overflow-hidden ${darkMode ? 'border-white/10 bg-black/20' : 'border-slate-200 bg-slate-50'} shadow-2xl`}>
+                <object data={previewSource} type="application/pdf" width="100%" height="600px">
+                  <p className="p-6 text-center text-sm">
+                    Your browser does not support inline PDF preview. <a href={previewSource} target="_blank" rel="noopener noreferrer" className="underline">Download the report</a>.
+                  </p>
+                </object>
+              </div>
+            ) : (
+              <div className={`rounded-3xl border py-20 text-center ${darkMode ? 'border-white/10 text-slate-300' : 'border-slate-200 text-slate-500'}`}>
+                Preview not available for this format.
+              </div>
+            )}
+            {previewSource && (
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    const link = document.createElement('a');
+                    link.href = previewSource;
+                    link.download = reportData?.filename || `${reportData?.name || 'report'}.pdf`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  className={`px-5 py-3 rounded-full text-sm font-medium shadow ${darkMode ? 'bg-indigo-600 hover:bg-indigo-500 text-white' : 'bg-indigo-500 hover:bg-indigo-600 text-white'} transition`}
+                >
+                  Download Report
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'share' && (
+          <div className="px-6 pb-6 space-y-6">
+            {/* Share Content */}
+            <div>
+              <h3 className="text-lg font-medium mb-2">Share via Email</h3>
+              <form onSubmit={handleEmailShare} className="flex items-center gap-2">
+                <input
+                  type="email"
+                  value={shareEmail}
+                  onChange={(e) => setShareEmail(e.target.value)}
+                  placeholder="Enter recipient's email"
+                  className={`flex-1 p-2 rounded border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-800'}`}
+                  required
+                />
+                <button type="submit" className="p-2 rounded bg-blue-500 text-white hover:bg-blue-600">
+                  <FaEnvelope className="mr-2 inline" /> Send
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Preview Modal Component
+const PreviewModal = ({ isOpen, onClose, report, hotelLogo, hotelConfig }) => {
+  const { theme } = useTheme();
+  const darkMode = theme === 'dark';
+  if (!isOpen || !report) return null;
+
+  const previewSource = report.previewData || report.fileContent;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className={`w-full max-w-6xl max-h-[92vh] overflow-hidden rounded-3xl shadow-[0_40px_80px_-60px_rgba(15,23,42,0.9)] ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-800'}`}>
+        <div className="p-4 flex justify-between items-center border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-xl font-bold">{report.name}</h2>
+          <button onClick={onClose}><FaTimesCircle size={24} /></button>
+        </div>
+        <div className="p-4 h-full overflow-auto">
+          {previewSource && (report.format === 'pdf' || report.type === 'PDF') ? (
+            <object data={previewSource} type="application/pdf" width="100%" height="600px">
+              <p>PDF Preview not supported</p>
+            </object>
+          ) : (
+            <p>Preview not available</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const Reports = () => {
+  const { user } = useUser();
+  const { theme } = useTheme();
+  const darkMode = theme === 'dark';
+
+  const HOTEL_CONFIG = {
+    name: 'Nhyiraba Hotel',
+    tagline: 'Luxury & Excellence Redefined',
+    address: 'Wassa Nkonya',
+    phone: '+233 59 856 9016',
+    email: 'Nhyirabahotel@gmail.com',
+    website: 'www.nhyirabahotel.com',
+    logo: '/logo.jpg',
+    logoMark: '/logo.jpg',
+    coverImage: '/hero1.jpg',
+    signatureBackdrop: '/hero.jpg',
+    colors: {
+      primary: '#1e40af',
+      secondary: '#059669',
+      accent: '#dc2626',
+      gold: '#d97706',
+      dark: '#1f2937',
+      light: '#f8fafc'
+    }
+  };
+
+  const brandAssetCache = useRef({ logo: null, cover: null });
+  const [logoDataUrl, setLogoDataUrl] = useState(null);
+  const [coverImageDataUrl, setCoverImageDataUrl] = useState(null);
+
+  // State for report parameters
+  const [dateRange, setDateRange] = useState('7days');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // State for data
+  const [financialData, setFinancialData] = useState([]);
+  const [poolVisits, setPoolVisits] = useState([]);
+  const [rooms, setRooms] = useState([]);
+  const [reservations, setReservations] = useState([]);
+
+  // State for selected report type
+  const [selectedReportType, setSelectedReportType] = useState('financial');
+
+  // State for report history
+  const [reportHistory, setReportHistory] = useState([]);
+
+  // State for preview modal
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [selectedReport, setSelectedReport] = useState(null);
+
+  useEffect(() => {
+    const loadBrandAssets = async () => {
+      // Logic to load brand assets
+      try {
+        // Mock loading for now or implement if needed
+      } catch (e) { console.error(e); }
+    };
+    loadBrandAssets();
+  }, []);
+
+  // Map database report to component format
+  const mapDbReportToComponentFormat = (dbReport) => {
+    return {
+      id: dbReport.id,
+      name: dbReport.name,
+      date: dbReport.date,
+      type: dbReport.type,
+      format: dbReport.format || dbReport.type?.toLowerCase(),
+      generatedBy: dbReport.generated_by,
+      filename: dbReport.filename,
+      fileContent: dbReport.file_content,
+      previewData: dbReport.preview_data
+    };
+  };
+
+  // Load report history
+  const fetchReportHistory = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('reports')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching report history:', error);
+        return;
+      }
+
+      if (data) {
+        const formattedReports = data.map(mapDbReportToComponentFormat);
+        setReportHistory(formattedReports);
+      }
+    } catch (error) {
+      console.error('Error fetching report history:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchReportHistory();
+  }, []);
+
+  const saveReportToSupabase = async (newReport) => {
+    try {
+      const { data, error } = await supabase
+        .from('reports')
+        .insert([{
+          id: newReport.id,
+          name: newReport.name,
+          date: newReport.date,
+          type: newReport.type,
+          format: newReport.format || newReport.type?.toLowerCase(),
+          generated_by: newReport.generatedBy,
+          filename: newReport.filename,
+          file_content: newReport.fileContent,
+          preview_data: newReport.previewData,
+          created_at: new Date().toISOString()
+        }]);
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error saving report:', error);
+      throw error;
+    }
+  };
+
+  const deleteReport = async (reportId) => {
+    try {
+      const { error } = await supabase.from('reports').delete().eq('id', reportId);
+      if (error) throw error;
+      setReportHistory(prev => prev.filter(r => r.id !== reportId));
+    } catch (error) {
+      console.error('Error deleting report:', error);
+      toast.error('Failed to delete report');
+    }
+  };
+
+  const openPreviewModal = (report) => {
+    setSelectedReport(report);
+    setShowPreviewModal(true);
+  };
+
+  const handleReportTypeChange = (e) => {
+    setSelectedReportType(e.target.value);
+  };
+
+  // Generate Financial Report PDF
+  const generateFinancialPdfReport = async () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
+
+    // Add Header
+    if (logoDataUrl) {
+      try {
+        doc.addImage(logoDataUrl, 'JPEG', 15, 15, 30, 30);
+      } catch (e) { console.error('Logo error', e); }
+    }
+
+    doc.setFontSize(22);
+    doc.setTextColor(44, 62, 80);
+    doc.text('Financial Report', pageWidth / 2, 25, { align: 'center' });
+
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`${HOTEL_CONFIG.name}`, pageWidth - 15, 20, { align: 'right' });
+    doc.text(`${format(new Date(), 'PPP')}`, pageWidth - 15, 25, { align: 'right' });
+
+    let yPos = 50;
+
+    // Calculate Financials
+    const roomRevenue = financialData.reduce((sum, inv) => sum + (parseFloat(inv.room_total) || 0), 0);
+    const serviceRevenue = financialData.reduce((sum, inv) => sum + (parseFloat(inv.service_total) || 0), 0);
+    const poolRevenue = poolVisits.reduce((sum, visit) => sum + (parseFloat(visit.amount) || 0), 0);
+    const totalRevenue = roomRevenue + serviceRevenue + poolRevenue;
+
+    // Summary Table
+    autoTable(doc, {
+      startY: yPos,
+      head: [['Revenue Source', 'Amount']],
+      body: [
+        ['Room Revenue', `GH₵ ${roomRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`],
+        ['Restaurant/Bar Revenue', `GH₵ ${serviceRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`],
+        ['Pool Revenue', `GH₵ ${poolRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`],
+        ['Total Revenue', `GH₵ ${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`]
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+      foot: [['Net Total', `GH₵ ${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`]],
+      footStyles: { fillColor: [241, 196, 15], textColor: 0, fontStyle: 'bold' }
+    });
+
+    // Save Report
+    const pdfOutput = doc.output('datauristring');
+    const filename = `Financial_Report_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+
+    // Save to history
+    await saveReportToSupabase({
+      id: uuidv4(),
+      name: 'Financial Report',
+      date: new Date().toISOString(),
+      type: 'FINANCIAL',
+      format: 'pdf',
+      generatedBy: user?.username || 'System',
+      filename: filename,
+      fileContent: pdfOutput,
+      previewData: pdfOutput
+    });
+    fetchReportHistory();
+
+    // Trigger download
+    doc.save(filename);
+  };
+
+  // Generate Excel Report
+  const generateExcelReport = () => {
+    const wb = XLSX.utils.book_new();
+
+    // Financial Data Sheet
+    const roomRevenue = financialData.reduce((sum, inv) => sum + (parseFloat(inv.room_total) || 0), 0);
+    const serviceRevenue = financialData.reduce((sum, inv) => sum + (parseFloat(inv.service_total) || 0), 0);
+    const poolRevenue = poolVisits.reduce((sum, visit) => sum + (parseFloat(visit.amount) || 0), 0);
+    const totalRevenue = roomRevenue + serviceRevenue + poolRevenue;
+
+    const financialSheetData = [
+      ['Financial Report', format(new Date(), 'yyyy-MM-dd')],
+      [''],
+      ['Revenue Source', 'Amount'],
+      ['Room Revenue', roomRevenue],
+      ['Restaurant/Bar Revenue', serviceRevenue],
+      ['Pool Revenue', poolRevenue],
+      ['Total Revenue', totalRevenue]
+    ];
+
+    const wsFinancial = XLSX.utils.aoa_to_sheet(financialSheetData);
+    XLSX.utils.book_append_sheet(wb, wsFinancial, "Financials");
+
+    // Pool Visits Sheet
+    const poolData = [['Date', 'Guest', 'Amount', 'Payment Method']];
+    poolVisits.forEach(v => {
+      poolData.push([
+        format(new Date(v.visit_date || v.created_at), 'yyyy-MM-dd'),
+        v.guest_name || 'Guest',
+        v.amount,
+        v.payment_method
+      ]);
+    });
+    const wsPool = XLSX.utils.aoa_to_sheet(poolData);
+    XLSX.utils.book_append_sheet(wb, wsPool, "Pool Visits");
+
+    const filename = `Report_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
+    XLSX.writeFile(wb, filename);
+
+    saveReportToSupabase({
+      id: uuidv4(),
+      name: 'Excel Report',
+      date: new Date().toISOString(),
+      type: 'EXCEL',
+      format: 'excel',
+      generatedBy: user?.username || 'System',
+      filename: filename,
+      fileContent: null,
+      previewData: null
+    });
+    fetchReportHistory();
+  };
+
+  // Generate CSV Report
+  const generateCsvReport = () => {
+    const roomRevenue = financialData.reduce((sum, inv) => sum + (parseFloat(inv.room_total) || 0), 0);
+    const serviceRevenue = financialData.reduce((sum, inv) => sum + (parseFloat(inv.service_total) || 0), 0);
+    const poolRevenue = poolVisits.reduce((sum, visit) => sum + (parseFloat(visit.amount) || 0), 0);
+    const totalRevenue = roomRevenue + serviceRevenue + poolRevenue;
+
+    const csvContent = [
+      ['Revenue Source', 'Amount'],
+      ['Room Revenue', roomRevenue],
+      ['Restaurant/Bar Revenue', serviceRevenue],
+      ['Pool Revenue', poolRevenue],
+      ['Total Revenue', totalRevenue]
+    ].map(e => e.join(",")).join("\n");
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const filename = `Financial_Report_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    saveAs(blob, filename);
+
+    saveReportToSupabase({
+      id: uuidv4(),
+      name: 'CSV Report',
+      date: new Date().toISOString(),
+      type: 'CSV',
+      format: 'csv',
+      generatedBy: user?.username || 'System',
+      filename: filename,
+      fileContent: null,
+      previewData: null
+    });
+    fetchReportHistory();
+  };
+
+  const handleGenerateReport = async () => {
+    setIsGenerating(true);
+    try {
+      if (selectedReportType === 'financial') {
+        await generateFinancialPdfReport();
+      } else if (selectedReportType === 'board') {
+        const result = await generateBoardReportDirectly(user, dateRange, HOTEL_CONFIG, logoDataUrl);
+
+        if (result.success) {
+          // Save locally
+          saveAs(result.blob, result.filename);
+
+          // Save to Supabase
+          await saveReportToSupabase({
+            id: uuidv4(),
+            name: 'Board-Level Executive Report',
+            date: new Date().toISOString(),
+            type: 'BOARD',
+            format: 'pdf',
+            generatedBy: user?.fullName || user?.username || 'System',
+            filename: result.filename,
+            fileContent: result.dataUri,
+            previewData: result.dataUri
+          });
+          fetchReportHistory();
+        } else {
+          throw result.error || new Error('Board report generation failed');
+        }
+      }
+      toast.success('Report generated successfully');
+    } catch (error) {
+      console.error('Generation failed', error);
+      toast.error('Failed to generate report');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+
+      try {
+        let days = 7;
+        let startDate = new Date();
+
+        switch (dateRange) {
+          case '30days': days = 30; break;
+          case '90days': days = 90; break;
+          case '12months': days = 365; break;
+          default: days = 7;
+        }
+
+        const fromDate = subDays(startDate, days).toISOString();
+
+        // Fetch invoice data
+        let { data: invoicesData } = await supabase
+          .from('invoices')
+          .select('*')
+          .gte('created_at', fromDate);
+
+        if (invoicesData) setFinancialData(invoicesData);
+
+        // Fetch pool visits
+        let { data: poolVisitsData } = await supabase
+          .from('pool_visits')
+          .select('*')
+          .gte('visit_date', fromDate);
+
+        if (poolVisitsData) setPoolVisits(poolVisitsData);
+
+        // Fetch rooms and reservations
+        let { data: roomsData } = await supabase.from('rooms').select('*');
+        if (roomsData) setRooms(roomsData);
+
+        let { data: reservationsData } = await supabase
+          .from('reservations')
+          .select('*')
+          .gte('created_at', fromDate);
+        if (reservationsData) setReservations(reservationsData);
+
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        toast.error('Failed to load report data');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [dateRange]);
+
+  return (
+    <DashboardLayout title="Reports & Analytics" activeLink="Reports">
+      <div className="space-y-6 custom-scrollbar">
+
+        {/* Header and Controls */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">Reports & Analytics</h1>
+            <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+              Generate and view financial, occupancy, and operational reports
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value)}
+              className={`p-2 rounded-lg border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-300'}`}
+            >
+              <option value="7days">Last 7 Days</option>
+              <option value="30days">Last 30 Days</option>
+              <option value="90days">Last 90 Days</option>
+              <option value="12months">Last 12 Months</option>
+            </select>
+
+            <select
+              value={selectedReportType}
+              onChange={handleReportTypeChange}
+              className={`p-2 rounded-lg border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-300'}`}
+            >
+              <option value="financial">Financial Report</option>
+              <option value="board">Board-Level Executive Report</option>
+            </select>
+
+            <button
+              onClick={handleGenerateReport}
+              disabled={isGenerating}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              {isGenerating ? 'Generating...' : 'Generate Report'}
+            </button>
+
+            <div className="flex gap-2">
+              <button onClick={generateExcelReport} className="p-2 text-green-600 bg-green-100 rounded-lg hover:bg-green-200" title="Export Excel">
+                <FaFileExcel />
+              </button>
+              <button onClick={generateCsvReport} className="p-2 text-yellow-600 bg-yellow-100 rounded-lg hover:bg-yellow-200" title="Export CSV">
+                <FaFileCsv />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Report History */}
+        <div className={`bg-gradient-to-br ${darkMode ? 'from-gray-800/40 to-slate-900/40' : 'from-gray-50 to-white'} backdrop-blur-lg rounded-xl p-6 shadow-lg border ${darkMode ? 'border-gray-700/40' : 'border-gray-200/80'} hover:shadow-lg transition-all duration-300`}>
+          <h3 className="text-lg font-medium mb-4 flex items-center">
+            <i className={`fas fa-history mr-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}></i>
+            Report History
+          </h3>
+
+          {reportHistory.length === 0 ? (
+            <div className={`flex flex-col items-center justify-center py-10 ${darkMode ? 'bg-slate-800/60' : 'bg-gray-50'} rounded-lg border ${darkMode ? 'border-slate-700' : 'border-gray-200'}`}>
+              <FaFilePdf className={`text-4xl mb-3 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`} />
+              <p className={`${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>No reports generated yet.</p>
+              <p className={`mt-2 text-sm ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>Generate your first report using the options above.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className={`flex items-center justify-between py-3 px-4 ${darkMode ? 'bg-slate-800/60' : 'bg-white'} rounded-lg border ${darkMode ? 'border-slate-700' : 'border-gray-200'} mb-2`}>
+                <div className="grid grid-cols-12 gap-2 w-full text-sm font-medium">
+                  <div className="col-span-4">Report Name</div>
+                  <div className="col-span-2">Date</div>
+                  <div className="col-span-2">Type</div>
+                  <div className="col-span-2">Author</div>
+                  <div className="col-span-2 text-right">Actions</div>
+                </div>
+              </div>
+
+              <div className="space-y-3 max-h-96 overflow-y-auto pr-1 custom-scrollbar">
+                {reportHistory.map((report, index) => (
+                  <div
+                    key={report.id}
+                    className={`grid grid-cols-12 gap-2 ${darkMode ? 'bg-slate-800/40 hover:bg-slate-800/60' : 'bg-white hover:bg-gray-50'} p-4 rounded-lg border ${darkMode ? 'border-slate-700/50' : 'border-gray-200'} transition-all duration-300 transform hover:scale-[1.01] hover:shadow-md relative overflow-hidden group`}
+                    style={{ animationDelay: `${index * 50}ms` }}
+                  >
+                    <div className="col-span-4 flex items-center relative z-10">
+                      <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center mr-3 ${darkMode ? 'bg-slate-700' : 'bg-gray-200'}`}>
+                        <FaFilePdf size={18} />
+                      </div>
+                      <div>
+                        <div className="font-medium line-clamp-1">{report.name}</div>
+                        <div className="text-xs opacity-70">{report.filename}</div>
+                      </div>
+                    </div>
+                    <div className="col-span-2 flex flex-col justify-center relative z-10">
+                      <div>{new Date(report.date).toLocaleString()}</div>
+                    </div>
+                    <div className="col-span-2 flex items-center relative z-10">
+                      <span className="text-xs px-2 py-1 rounded bg-gray-200 dark:bg-gray-700">{report.type}</span>
+                    </div>
+                    <div className="col-span-2 flex items-center relative z-10">
+                      <span className="truncate">{report.generatedBy}</span>
+                    </div>
+                    <div className="col-span-2 flex justify-end items-center space-x-1 relative z-10">
+                      {report.fileContent && (
+                        <button
+                          onClick={() => {
+                            // Direct download using the stored file content
+                            if (report.type === 'PDF' || report.type === 'BOARD') {
+                              // Create a link to download the PDF
+                              const link = document.createElement('a');
+                              link.href = report.fileContent;
+                              link.download = report.filename;
+                              link.click();
+                            } else if (report.type === 'EXCEL' || report.type === 'CSV') {
+                              // For Excel and CSV, create a download link
+                              const link = document.createElement('a');
+                              link.href = report.fileContent;
+                              link.download = report.filename;
+                              link.click();
+                            }
+                          }}
+                          className={`p-2 rounded-lg ${darkMode ? 'bg-green-900/20 hover:bg-green-800/40 text-green-400' : 'bg-green-50 hover:bg-green-100 text-green-600'} transition-colors backdrop-blur-sm tooltip-trigger group relative`}
+                          aria-label=""
+                        >
+                          <FaDownload size={16} />
+                          <span className="tooltip-text"></span>
+                        </button>
+                      )}
+                      <button onClick={() => openPreviewModal(report)} className="p-2 text-blue-500 hover:bg-blue-100 rounded"><FaEye /></button>
+                      <button onClick={() => { if (window.confirm('Are you sure you want to delete this report?')) deleteReport(report.id); }} className="p-2 text-red-500 hover:bg-red-100 rounded"><FaTimesCircle /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      <ReportModal
+        isOpen={showPreviewModal}
+        onClose={() => setShowPreviewModal(false)}
+        reportData={selectedReport}
+        hotelConfig={HOTEL_CONFIG}
+        darkMode={darkMode}
+      />
+      <ToastContainer />
+      <style jsx>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: ${darkMode ? 'rgba(15, 23, 42, 0.3)' : 'rgba(241, 245, 249, 0.7)'}; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: ${darkMode ? 'rgba(148, 163, 184, 0.5)' : 'rgba(148, 163, 184, 0.5)'}; border-radius: 10px; }
+      `}</style>
+    </DashboardLayout>
+  );
+};
+
+export default Reports;

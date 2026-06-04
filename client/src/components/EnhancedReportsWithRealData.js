@@ -8,6 +8,7 @@ import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import { toast } from 'react-toastify';
 import { v4 as uuidv4 } from 'uuid';
+import BoardLevelReport from './BoardLevelReport';
 
 // Hotel Configuration - Centralized branding
 const HOTEL_CONFIG = {
@@ -36,6 +37,7 @@ const EnhancedReportsWithRealData = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportHistory, setReportHistory] = useState([]);
   const [logoDataUrl, setLogoDataUrl] = useState(null);
+  const [showBoardReport, setShowBoardReport] = useState(false);
   
   // Real-time data states
   const [realTimeData, setRealTimeData] = useState({
@@ -1047,6 +1049,23 @@ const EnhancedReportsWithRealData = () => {
     fetchRealTimeHotelData();
   }, [dateRange]);
 
+  // Conditional render for board report
+  if (showBoardReport) {
+    return (
+      <div className={`enhanced-reports p-6 ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'}`}>
+        <div className="max-w-6xl mx-auto">
+          <button
+            onClick={() => setShowBoardReport(false)}
+            className="mb-4 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+          >
+            Back to Standard Reports
+          </button>
+          <BoardLevelReport />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`enhanced-reports p-6 ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'}`}>
       <div className="max-w-6xl mx-auto">
@@ -1067,6 +1086,21 @@ const EnhancedReportsWithRealData = () => {
         </div>
 
         {/* Controls */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="md:col-span-4">
+            <button
+              onClick={() => setShowBoardReport(true)}
+              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-4 rounded-lg hover:from-purple-700 hover:to-blue-700 font-medium transition-all duration-200 shadow-lg"
+            >
+              Generate Board-Level Executive Report (13 Sections)
+            </button>
+          </div>
+        </div>
+
+        <div className="border-t border-gray-300 my-8"></div>
+
+        <h2 className="text-2xl font-bold mb-6">Standard Reports</h2>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div>
             <label className="block text-sm font-medium mb-2">Report Type</label>

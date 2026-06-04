@@ -6,22 +6,23 @@ import 'react-datepicker/dist/react-datepicker.css';
 import { useRoomReservation } from '../context/RoomReservationContext';
 import { datePickerConfig } from '../utils/dateUtils';
 import '../styles/FuturisticDatepicker.css';
+import { FaUser, FaPhone, FaChild, FaCalendarAlt, FaHotel, FaClipboardCheck, FaCreditCard, FaMoneyBillWave, FaTimes, FaChevronRight, FaChevronLeft, FaBed } from 'react-icons/fa';
 
 const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
   const { theme } = useTheme();
   const isDarkMode = theme === 'dark';
   const { createReservation, rooms, refreshData } = useRoomReservation();
-  
+
   useEffect(() => {
-    Modal.setAppElement('body');
+    if (typeof document !== 'undefined') {
+      Modal.setAppElement('body');
+    }
   }, []);
 
   // Initial form state
   const [formData, setFormData] = useState({
     guestName: '',
-    email: '',
     phoneNumber: '',
-    roomType: 'Standard',
     roomNumber: '',
     checkInDate: new Date(),
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 1)),
@@ -43,6 +44,10 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
       ...prev,
       [name]: value
     }));
+    // Clear error when user types
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: null }));
+    }
   };
 
   // Handle date changes
@@ -51,50 +56,31 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
       ...prev,
       [name]: date
     }));
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: null }));
+    }
   };
 
   // Form validation
-  const validateForm = () => {
-    const newErrors = {};
-    if (!formData.guestName.trim()) newErrors.guestName = 'Guest name is required';
-    if (!formData.email.trim()) newErrors.email = 'Email is required';
-    if (!/^\S+@\S+\.\S+$/.test(formData.email)) newErrors.email = 'Email is invalid';
-    if (!formData.phoneNumber.trim()) newErrors.phoneNumber = 'Phone number is required';
-    if (!formData.roomNumber.trim()) newErrors.roomNumber = 'Room number is required';
-    if (!formData.checkInDate) newErrors.checkInDate = 'Check-in date is required';
-    if (!formData.checkOutDate) newErrors.checkOutDate = 'Check-out date is required';
-    
-    // Check if check-out date is after check-in date
-    if (formData.checkInDate && formData.checkOutDate && 
-        formData.checkOutDate <= formData.checkInDate) {
-      newErrors.checkOutDate = 'Check-out date must be after check-in date';
-    }
-    
-    return newErrors;
-  };
-
-  // Next step validation
   const validateStep = (step) => {
     const newErrors = {};
-    
+
     if (step === 1) {
       // Guest information validation
       if (!formData.guestName.trim()) newErrors.guestName = 'Guest name is required';
-      if (!formData.email.trim()) newErrors.email = 'Email is required';
-      if (!/^\S+@\S+\.\S+$/.test(formData.email)) newErrors.email = 'Email is invalid';
       if (!formData.phoneNumber.trim()) newErrors.phoneNumber = 'Phone number is required';
     } else if (step === 2) {
-      if (!formData.roomNumber) newErrors.roomNumber = 'Room number is required';
+      if (!formData.roomNumber) newErrors.roomNumber = 'Please select a room';
       if (!formData.checkInDate) newErrors.checkInDate = 'Check-in date is required';
       if (!formData.checkOutDate) newErrors.checkOutDate = 'Check-out date is required';
-      
+
       // Check if check-out date is after check-in date
-      if (formData.checkInDate && formData.checkOutDate && 
-          formData.checkOutDate <= formData.checkInDate) {
+      if (formData.checkInDate && formData.checkOutDate &&
+        formData.checkOutDate <= formData.checkInDate) {
         newErrors.checkOutDate = 'Check-out date must be after check-in date';
       }
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -109,53 +95,45 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
     setCurrentStep(currentStep - 1);
   };
 
-  // Handle form submission - only called when the Create Reservation button is clicked
+  // Handle form submission
   const handleSubmit = async () => {
-    // Validate form
-    const formErrors = validateForm();
-    if (Object.keys(formErrors).length > 0) {
-      setErrors(formErrors);
-      return;
-    }
-    
     setIsSubmitting(true);
-    
+
     // Format dates as strings
-    const checkInDateStr = formData.checkInDate instanceof Date 
-      ? formData.checkInDate.toISOString().split('T')[0] 
+    const checkInDateStr = formData.checkInDate instanceof Date
+      ? formData.checkInDate.toISOString().split('T')[0]
       : formData.checkInDate;
-    
-    const checkOutDateStr = formData.checkOutDate instanceof Date 
-      ? formData.checkOutDate.toISOString().split('T')[0] 
+
+    const checkOutDateStr = formData.checkOutDate instanceof Date
+      ? formData.checkOutDate.toISOString().split('T')[0]
       : formData.checkOutDate;
-    
+
+    // Find selected room to get its current price
+    // Use loose equality to match string/number IDs
+    const selectedRoom = rooms.find(r => r.id == formData.roomNumber);
+
     // Create reservation object
     const reservationData = {
       guestName: formData.guestName,
-      email: formData.email,
       phoneNumber: formData.phoneNumber,
-      roomType: formData.roomType,
       roomNumber: formData.roomNumber,
+      roomPrice: selectedRoom ? selectedRoom.price : 0,
       checkInDate: checkInDateStr,
       checkOutDate: checkOutDateStr,
       adults: formData.adults,
       children: formData.children,
       specialRequests: formData.specialRequests,
-      paymentMethod: formData.paymentMethod
+      paymentMethod: formData.paymentMethod,
+      email: ''
     };
-    
+
     try {
       // Create the reservation in the context
-      const result = await createReservation(parseInt(formData.roomNumber), reservationData);
-      
+      const result = await createReservation(formData.roomNumber, reservationData);
+
       if (result.success) {
-        // Call onAddReservation with the new reservation
         onAddReservation(result.data);
-        
-        // Refresh the reservations data to update the list
         refreshData();
-        
-        // Reset form and close modal
         handleModalClose();
       } else {
         setErrors({ general: result.error || 'Failed to create reservation' });
@@ -177,17 +155,17 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
       bottom: 'auto',
       marginRight: '-50%',
       transform: 'translate(-50%, -50%)',
-      maxWidth: '750px',
-      width: '100%',
+      maxWidth: '800px',
+      width: '95%',
       maxHeight: '90vh',
-      overflow: 'visible',
       padding: 0,
       border: 'none',
-      borderRadius: '16px',
-      backgroundColor: 'transparent'
+      borderRadius: '24px',
+      backgroundColor: 'transparent',
+      overflow: 'visible' // Allow datepicker to overflow
     },
     overlay: {
-      backgroundColor: 'rgba(0, 0, 0, 0.75)',
+      backgroundColor: 'rgba(0, 0, 0, 0.7)',
       backdropFilter: 'blur(8px)',
       zIndex: 1000
     }
@@ -197,9 +175,7 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
   const handleModalClose = () => {
     setFormData({
       guestName: '',
-      email: '',
       phoneNumber: '',
-      roomType: 'Standard',
       roomNumber: '',
       checkInDate: new Date(),
       checkOutDate: new Date(new Date().setDate(new Date().getDate() + 1)),
@@ -213,320 +189,343 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
     onRequestClose();
   };
 
+  // Helper to get available rooms
+  const availableRooms = rooms
+    .filter(room => room.status === 'Available')
+    .sort((a, b) => a.room_number - b.room_number);
+
   const renderStepIndicator = () => {
+    const steps = [
+      { num: 1, title: 'Guest' },
+      { num: 2, title: 'Room' },
+      { num: 3, title: 'Confirm' }
+    ];
+
     return (
-      <div className="step-indicator">
-        <div className={`step ${currentStep >= 1 ? 'active' : ''}`}>
-          <div className="step-number">1</div>
-          <div className="step-title">Guest Info</div>
-        </div>
-        <div className="step-connector">
-          <div className={`connector-line ${currentStep >= 2 ? 'active' : ''}`}></div>
-        </div>
-        <div className={`step ${currentStep >= 2 ? 'active' : ''}`}>
-          <div className="step-number">2</div>
-          <div className="step-title">Room & Dates</div>
-        </div>
-        <div className="step-connector">
-          <div className={`connector-line ${currentStep >= 3 ? 'active' : ''}`}></div>
-        </div>
-        <div className={`step ${currentStep >= 3 ? 'active' : ''}`}>
-          <div className="step-number">3</div>
-          <div className="step-title">Confirm</div>
-        </div>
+      <div className="flex items-center justify-center mb-8 px-4">
+        {steps.map((step, index) => (
+          <React.Fragment key={step.num}>
+            <div className="flex flex-col items-center relative z-10">
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 ${currentStep >= step.num
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30 scale-110'
+                  : isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500'
+                  }`}
+              >
+                {step.num}
+              </div>
+              <span
+                className={`text-xs mt-2 font-medium transition-colors duration-300 ${currentStep >= step.num
+                  ? isDarkMode ? 'text-blue-400' : 'text-blue-600'
+                  : isDarkMode ? 'text-gray-500' : 'text-gray-400'
+                  }`}
+              >
+                {step.title}
+              </span>
+            </div>
+            {index < steps.length - 1 && (
+              <div className={`h-1 w-16 -mt-6 mx-2 rounded transition-colors duration-500 ${currentStep > step.num
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600'
+                : isDarkMode ? 'bg-gray-700' : 'bg-gray-200'
+                }`} />
+            )}
+          </React.Fragment>
+        ))}
       </div>
     );
   };
 
-  const renderGuestInfoStep = () => {
-    return (
-    <div className="step-content">
-      <h3 className="step-heading">
-          <i className="fas fa-user-plus"></i>
+  const renderGuestInfoStep = () => (
+    <div className="animate-fadeIn">
+      <h3 className={`text-xl font-semibold mb-6 flex items-center ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+        <span className="bg-blue-500/10 p-2 rounded-lg mr-3 text-blue-500">
+          <FaUser />
+        </span>
         Guest Information
       </h3>
-      
-      <div className="form-grid">
-        <div className="form-group">
-            <label className="form-label">
-              Guest Name <span className="required">*</span>
-            </label>
-          <div className="input-wrapper">
-              <span className="input-icon">
-                <i className="fas fa-user"></i>
-              </span>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="col-span-2 md:col-span-1">
+          <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+            Full Name <span className="text-red-500">*</span>
+          </label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+              <FaUser />
+            </div>
             <input
               type="text"
               name="guestName"
               value={formData.guestName}
               onChange={handleChange}
-                className={`form-input ${errors.guestName ? 'border-red-500' : ''}`}
-                placeholder="Full name"
+              className={`w-full pl-10 pr-4 py-3 rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none ${isDarkMode
+                ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500'
+                : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400'
+                } ${errors.guestName ? 'border-red-500 ring-1 ring-red-500' : ''}`}
+              placeholder="Enter guest name"
             />
-            </div>
-            {errors.guestName && <p className="text-red-500 text-xs mt-1">{errors.guestName}</p>}
+          </div>
+          {errors.guestName && <p className="text-red-500 text-xs mt-1 ml-1">{errors.guestName}</p>}
         </div>
-        
-        <div className="form-group">
-            <label className="form-label">
-              Email <span className="required">*</span>
-            </label>
-          <div className="input-wrapper">
-              <span className="input-icon">
-                <i className="fas fa-envelope"></i>
-              </span>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-                className={`form-input ${errors.email ? 'border-red-500' : ''}`}
-                placeholder="Email address"
-            />
+
+        <div className="col-span-2 md:col-span-1">
+          <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+            Phone Number <span className="text-red-500">*</span>
+          </label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+              <FaPhone className="transform rotate-90" />
             </div>
-            {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
-        </div>
-        
-        <div className="form-group">
-            <label className="form-label">
-              Phone Number <span className="required">*</span>
-            </label>
-          <div className="input-wrapper">
-              <span className="input-icon">
-                <i className="fas fa-phone"></i>
-              </span>
             <input
-                type="text"
+              type="tel"
               name="phoneNumber"
               value={formData.phoneNumber}
               onChange={handleChange}
-                className={`form-input ${errors.phoneNumber ? 'border-red-500' : ''}`}
-                placeholder="Phone number"
+              className={`w-full pl-10 pr-4 py-3 rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none ${isDarkMode
+                ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500'
+                : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400'
+                } ${errors.phoneNumber ? 'border-red-500 ring-1 ring-red-500' : ''}`}
+              placeholder="Enter phone number"
             />
-            </div>
-            {errors.phoneNumber && <p className="text-red-500 text-xs mt-1">{errors.phoneNumber}</p>}
+          </div>
+          {errors.phoneNumber && <p className="text-red-500 text-xs mt-1 ml-1">{errors.phoneNumber}</p>}
         </div>
-        
-        <div className="form-group guests-group">
-          <label className="form-label">Guests</label>
-          <div className="guests-container">
-            <div className="guest-select">
-              <div className="guest-label">
-                  <i className="fas fa-user"></i> Adults
+
+        <div className="col-span-2 grid grid-cols-2 gap-6">
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              Adults
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                <FaUser />
               </div>
               <select
                 name="adults"
                 value={formData.adults}
                 onChange={handleChange}
+                className={`w-full pl-10 pr-4 py-3 rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none appearance-none ${isDarkMode
+                  ? 'bg-gray-800 border-gray-700 text-white'
+                  : 'bg-gray-50 border-gray-200 text-gray-900'
+                  }`}
               >
-                  {[1, 2, 3, 4, 5, 6].map(num => (
-                  <option key={num} value={num}>{num}</option>
+                {[1, 2, 3, 4, 5, 6].map(num => (
+                  <option key={num} value={num}>{num} Adult{num > 1 ? 's' : ''}</option>
                 ))}
               </select>
+              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-gray-400">
+                <FaChevronRight className="transform rotate-90 text-xs" />
+              </div>
             </div>
-            <div className="guest-select">
-              <div className="guest-label">
-                  <i className="fas fa-child"></i> Children
+          </div>
+
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              Children
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                <FaChild />
               </div>
               <select
                 name="children"
                 value={formData.children}
                 onChange={handleChange}
+                className={`w-full pl-10 pr-4 py-3 rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none appearance-none ${isDarkMode
+                  ? 'bg-gray-800 border-gray-700 text-white'
+                  : 'bg-gray-50 border-gray-200 text-gray-900'
+                  }`}
               >
                 {[0, 1, 2, 3, 4].map(num => (
-                  <option key={num} value={num}>{num}</option>
+                  <option key={num} value={num}>{num} Child{num !== 1 ? 'ren' : ''}</option>
                 ))}
               </select>
+              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-gray-400">
+                <FaChevronRight className="transform rotate-90 text-xs" />
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
   );
-  };
 
-  const renderRoomSelectionStep = () => {
-    return (
-    <div className="step-content">
-      <h3 className="step-heading">
-          <i className="fas fa-hotel"></i>
+  const renderRoomSelectionStep = () => (
+    <div className="animate-fadeIn">
+      <h3 className={`text-xl font-semibold mb-6 flex items-center ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+        <span className="bg-purple-500/10 p-2 rounded-lg mr-3 text-purple-500">
+          <FaHotel />
+        </span>
         Room & Dates
       </h3>
-      
-      <div className="form-grid">
-        <div className="form-group">
-            <label className="form-label">
-              Room Type <span className="required">*</span>
-            </label>
-            <select
-              name="roomType"
-              value={formData.roomType}
-              onChange={handleChange}
-              className="form-select"
-            >
-              <option value="Standard">Standard</option>
-              <option value="Deluxe">Deluxe</option>
-              <option value="Suite">Suite</option>
-              <option value="Executive">Executive</option>
-            </select>
-        </div>
-        
-        <div className="form-group">
-            <label className="form-label">
-              Room <span className="required">*</span>
-            </label>
-          <div className="input-wrapper">
-              <span className="input-icon">
-                <i className="fas fa-door-open"></i>
-              </span>
+
+      <div className="space-y-6">
+        <div>
+          <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+            Select Room <span className="text-red-500">*</span>
+          </label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+              <FaBed />
+            </div>
             <select
               name="roomNumber"
               value={formData.roomNumber}
               onChange={handleChange}
-                className={`form-select ${errors.roomNumber ? 'border-red-500' : ''}`}
+              className={`w-full pl-10 pr-4 py-3 rounded-xl border focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all outline-none appearance-none ${isDarkMode
+                ? 'bg-gray-800 border-gray-700 text-white'
+                : 'bg-gray-50 border-gray-200 text-gray-900'
+                } ${errors.roomNumber ? 'border-red-500 ring-1 ring-red-500' : ''}`}
             >
-              <option value="">Select a room</option>
-              {rooms
-                .filter(room => room.status === 'Available')
-                .sort((a, b) => a.id - b.id)
-                .map(room => (
-                  <option key={room.id} value={room.id}>
-                      {room.name || room.room_number} - {room.type}
-                  </option>
-                ))}
+              <option value="">-- Choose a Room --</option>
+              {availableRooms.map(room => (
+                <option key={room.id} value={room.id}>
+                  Room {room.room_number} - {room.type} (₵{room.price})
+                </option>
+              ))}
             </select>
+            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-gray-400">
+              <FaChevronRight className="transform rotate-90 text-xs" />
+            </div>
           </div>
-            {errors.roomNumber && <p className="text-red-500 text-xs mt-1">{errors.roomNumber}</p>}
+          {errors.roomNumber && <p className="text-red-500 text-xs mt-1 ml-1">{errors.roomNumber}</p>}
+          <p className={`text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+            Only available rooms are shown.
+          </p>
         </div>
-        
-        <div className="form-group datepicker-group">
-            <label className="form-label">
-              Check-In Date <span className="required">*</span>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              Check-In Date <span className="text-red-500">*</span>
             </label>
-            <div className="datepicker-wrapper">
-            <div className="datepicker-icon-wrapper">
-              <i className="fas fa-calendar-check"></i>
-            </div>
-            <DatePicker
-              selected={formData.checkInDate}
-              onChange={(date) => handleDateChange('checkInDate', date)}
-              className="futuristic-datepicker"
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 z-10">
+                <FaCalendarAlt />
+              </div>
+              <DatePicker
+                selected={formData.checkInDate}
+                onChange={(date) => handleDateChange('checkInDate', date)}
+                className={`w-full pl-10 pr-4 py-3 rounded-xl border focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all outline-none ${isDarkMode
+                  ? 'bg-gray-800 border-gray-700 text-white'
+                  : 'bg-gray-50 border-gray-200 text-gray-900'
+                  }`}
                 calendarClassName={isDarkMode ? "futuristic-calendar" : "light-calendar"}
-              {...datePickerConfig}
-            />
-            </div>
-        </div>
-        
-        <div className="form-group datepicker-group">
-            <label className="form-label">
-              Check-Out Date <span className="required">*</span>
-            </label>
-            <div className="datepicker-wrapper">
-            <div className="datepicker-icon-wrapper checkout-icon">
-                <i className="fas fa-calendar-alt"></i>
-            </div>
-            <DatePicker
-              selected={formData.checkOutDate}
-              onChange={(date) => handleDateChange('checkOutDate', date)}
-              className="futuristic-datepicker"
-                calendarClassName={isDarkMode ? "futuristic-calendar" : "light-calendar"}
-              {...datePickerConfig}
+                {...datePickerConfig}
               />
             </div>
-            {errors.checkOutDate && (
-              <p className="text-red-500 text-xs mt-1">{errors.checkOutDate}</p>
-            )}
+            {errors.checkInDate && <p className="text-red-500 text-xs mt-1 ml-1">{errors.checkInDate}</p>}
+          </div>
+
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              Check-Out Date <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 z-10">
+                <FaCalendarAlt />
+              </div>
+              <DatePicker
+                selected={formData.checkOutDate}
+                onChange={(date) => handleDateChange('checkOutDate', date)}
+                className={`w-full pl-10 pr-4 py-3 rounded-xl border focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all outline-none ${isDarkMode
+                  ? 'bg-gray-800 border-gray-700 text-white'
+                  : 'bg-gray-50 border-gray-200 text-gray-900'
+                  }`}
+                calendarClassName={isDarkMode ? "futuristic-calendar" : "light-calendar"}
+                {...datePickerConfig}
+                minDate={formData.checkInDate}
+              />
+            </div>
+            {errors.checkOutDate && <p className="text-red-500 text-xs mt-1 ml-1">{errors.checkOutDate}</p>}
+          </div>
         </div>
       </div>
     </div>
   );
-  };
 
   const renderConfirmationStep = () => {
-    // Find selected room details
-    const selectedRoom = rooms.find(room => room.id === parseInt(formData.roomNumber)) || {};
-    
-    // Calculate number of nights
-    const nights = Math.ceil((formData.checkOutDate - formData.checkInDate) / (1000 * 60 * 60 * 24));
-    
-    // Calculate total price
+    const selectedRoom = rooms.find(room => room.id == formData.roomNumber) || {};
+    const nights = Math.ceil((formData.checkOutDate - formData.checkInDate) / (1000 * 60 * 60 * 24)) || 1;
     const roomPrice = selectedRoom.price || 0;
     const totalPrice = roomPrice * nights;
-    
+
     return (
-      <div className="step-content confirmation-step">
-        <h3 className="step-heading">
-          <i className="fas fa-clipboard-check"></i>
-          Confirm Reservation
+      <div className="animate-fadeIn">
+        <h3 className={`text-xl font-semibold mb-6 flex items-center ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+          <span className="bg-green-500/10 p-2 rounded-lg mr-3 text-green-500">
+            <FaClipboardCheck />
+          </span>
+          Confirm Details
         </h3>
-        
-        <div className="confirmation-grid">
-          <div className="confirmation-section">
-            <h4 className="confirmation-heading">Guest Details</h4>
-            <div className="confirmation-info">
-              <div className="info-row">
-                <div className="info-label"><i className="fas fa-user"></i> Name:</div>
-                <div className="info-value">{formData.guestName}</div>
-              </div>
-              <div className="info-row">
-                <div className="info-label"><i className="fas fa-envelope"></i> Email:</div>
-                <div className="info-value">{formData.email}</div>
-              </div>
-              <div className="info-row">
-                <div className="info-label"><i className="fas fa-phone"></i> Phone:</div>
-                <div className="info-value">{formData.phoneNumber}</div>
-              </div>
-              <div className="info-row">
-                <div className="info-label"><i className="fas fa-users"></i> Guests:</div>
-                <div className="info-value">{formData.adults} Adults, {formData.children} Children</div>
-              </div>
+
+        <div className={`rounded-2xl p-6 mb-6 ${isDarkMode ? 'bg-gray-800/50' : 'bg-gray-50'}`}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8">
+            <div>
+              <p className={`text-xs uppercase tracking-wider font-semibold mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Guest</p>
+              <p className={`text-lg font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{formData.guestName}</p>
+              <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{formData.phoneNumber}</p>
+            </div>
+
+            <div>
+              <p className={`text-xs uppercase tracking-wider font-semibold mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Room</p>
+              <p className={`text-lg font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                Room {selectedRoom.room_number || 'N/A'}
+              </p>
+              <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>₵{roomPrice}/night</p>
+            </div>
+
+            <div>
+              <p className={`text-xs uppercase tracking-wider font-semibold mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Dates</p>
+              <p className={`text-base font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                {formData.checkInDate.toLocaleDateString()} — {formData.checkOutDate.toLocaleDateString()}
+              </p>
+              <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{nights} Night{nights !== 1 ? 's' : ''}</p>
+            </div>
+
+            <div>
+              <p className={`text-xs uppercase tracking-wider font-semibold mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Party</p>
+              <p className={`text-base font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                {formData.adults} Adult{formData.adults !== 1 ? 's' : ''}, {formData.children} Child{formData.children !== 1 ? 'ren' : ''}
+              </p>
             </div>
           </div>
-          
-          <div className="confirmation-section">
-            <h4 className="confirmation-heading">Reservation Details</h4>
-            <div className="confirmation-info">
-              <div className="info-row">
-                <div className="info-label"><i className="fas fa-bed"></i> Room:</div>
-                <div className="info-value">{selectedRoom.name || `Room ${selectedRoom.room_number}`} ({selectedRoom.type})</div>
+        </div>
+
+        <div className="mb-6">
+          <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+            Special Requests
+          </label>
+          <textarea
+            name="specialRequests"
+            value={formData.specialRequests}
+            onChange={handleChange}
+            rows="2"
+            className={`w-full p-4 rounded-xl border focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all outline-none resize-none ${isDarkMode
+              ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500'
+              : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400'
+              }`}
+            placeholder="Any special requirements..."
+          ></textarea>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              Payment Method
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                <FaCreditCard />
               </div>
-              <div className="info-row">
-                <div className="info-label"><i className="fas fa-calendar-alt"></i> Check-in:</div>
-                <div className="info-value">{formData.checkInDate.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</div>
-              </div>
-              <div className="info-row">
-                <div className="info-label"><i className="fas fa-calendar-alt"></i> Check-out:</div>
-                <div className="info-value">{formData.checkOutDate.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</div>
-              </div>
-              <div className="info-row">
-                <div className="info-label"><i className="fas fa-moon"></i> Nights:</div>
-                <div className="info-value">{nights}</div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="confirmation-section special-requests">
-            <h4 className="confirmation-heading">Special Requests</h4>
-            <div className="confirmation-info">
-              <textarea
-                name="specialRequests"
-                value={formData.specialRequests}
-                onChange={handleChange}
-                rows="2"
-                className="special-requests-input"
-                placeholder="Any special requirements or notes"
-              ></textarea>
-            </div>
-          </div>
-          
-          <div className="confirmation-section payment-section">
-            <h4 className="confirmation-heading">Payment Method</h4>
-            <div className="payment-methods">
               <select
                 name="paymentMethod"
                 value={formData.paymentMethod}
                 onChange={handleChange}
-                className="payment-select"
+                className={`w-full pl-10 pr-4 py-3 rounded-xl border focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all outline-none appearance-none ${isDarkMode
+                  ? 'bg-gray-800 border-gray-700 text-white'
+                  : 'bg-gray-50 border-gray-200 text-gray-900'
+                  }`}
               >
                 <option value="Credit Card">Credit Card</option>
                 <option value="Debit Card">Debit Card</option>
@@ -534,65 +533,30 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
                 <option value="Bank Transfer">Bank Transfer</option>
                 <option value="Mobile Money">Mobile Money</option>
               </select>
-            </div>
-            
-            <div className="price-summary">
-              <div className="pricing-row">
-                <div className="pricing-label">Room Rate:</div>
-                <div className="pricing-value">GH₵{roomPrice.toFixed(2)} × {nights} nights</div>
-              </div>
-              <div className="pricing-row total-row">
-                <div className="pricing-label">Total:</div>
-                <div className="pricing-value total-price">GH₵{totalPrice.toFixed(2)}</div>
+              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-gray-400">
+                <FaChevronRight className="transform rotate-90 text-xs" />
               </div>
             </div>
           </div>
+
+          <div className={`p-4 rounded-xl flex justify-between items-center ${isDarkMode ? 'bg-green-900/20 border border-green-500/30' : 'bg-green-50 border border-green-200'}`}>
+            <span className={`font-medium ${isDarkMode ? 'text-green-400' : 'text-green-700'}`}>Total Amount</span>
+            <span className={`text-2xl font-bold ${isDarkMode ? 'text-green-400' : 'text-green-700'}`}>
+              ₵{totalPrice.toFixed(2)}
+            </span>
+          </div>
         </div>
-        
-        {/* Confirmation Button */}
-        <div className="confirm-button-container mt-6 flex justify-center">
-          <button
-            type="button"
-            className="confirm-button bg-gradient-to-r from-green-500 to-emerald-600 px-8 py-3 rounded-lg text-white font-semibold hover:from-green-600 hover:to-emerald-700 shadow-lg flex items-center justify-center space-x-2 transition-all"
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <>
-                <div className="loading-spinner mr-2"></div>
-                <span>Processing...</span>
-              </>
-            ) : (
-              <>
-                <i className="fas fa-check-circle mr-2"></i>
-                <span>Confirm Reservation</span>
-              </>
-            )}
-          </button>
-        </div>
-        
+
         {errors.general && (
-          <div className="general-error mt-4">
-            <i className="fas fa-exclamation-circle"></i>
-            {errors.general}
+          <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-500 text-sm flex items-center">
+            <FaTimes className="mr-2" /> {errors.general}
           </div>
         )}
       </div>
     );
   };
 
-  const renderCurrentStep = () => {
-    switch(currentStep) {
-      case 1:
-        return renderGuestInfoStep();
-      case 2:
-        return renderRoomSelectionStep();
-      case 3:
-        return renderConfirmationStep();
-      default:
-        return null;
-    }
-  };
+  if (!isOpen) return null;
 
   return (
     <Modal
@@ -600,54 +564,94 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
       onRequestClose={handleModalClose}
       style={customStyles}
       contentLabel="New Reservation"
+      closeTimeoutMS={300}
     >
-      <div className={`futuristic-modal ${isDarkMode ? 'dark-mode' : 'light-mode'}`}>
-        <div className="modal-glow"></div>
-        
-        {/* Header */}
-        <div className="modal-header">
-          <div className="modal-title">
-            <div className="title-icon"><i className="fas fa-calendar-plus"></i></div>
-            <h2>New Reservation</h2>
-          </div>
-          <button
-            onClick={handleModalClose}
-            className="close-button"
-            aria-label="Close"
-          >
-            <i className="fas fa-times"></i>
-          </button>
-        </div>
+      <div className={`relative w-full h-full flex flex-col max-h-[90vh] ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+        {/* Glassmorphism Background */}
+        <div className={`absolute inset-0 rounded-3xl backdrop-blur-xl ${isDarkMode
+          ? 'bg-gray-900/90 border border-gray-700/50 shadow-2xl shadow-black/50'
+          : 'bg-white/95 border border-white/50 shadow-2xl shadow-gray-200/50'
+          }`}></div>
 
-        {/* Form */}
-        <div>
-          {renderStepIndicator()}
-          
-          <div className="modal-body">
-            {renderCurrentStep()}
+        {/* Content Container */}
+        <div className="relative z-10 flex flex-col h-full p-6 md:p-8">
+          {/* Header */}
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-purple-600">
+                New Reservation
+              </h2>
+              <p className={`text-sm mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                Create a new booking for a guest
+              </p>
+            </div>
+            <button
+              onClick={handleModalClose}
+              className={`p-2 rounded-full transition-colors ${isDarkMode
+                ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
+                : 'hover:bg-gray-100 text-gray-500 hover:text-gray-800'
+                }`}
+            >
+              <FaTimes className="text-xl" />
+            </button>
           </div>
-          
-          <div className="modal-footer">
-            {currentStep > 1 && (
+
+          {/* Stepper */}
+          {renderStepIndicator()}
+
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto custom-scrollbar px-1 py-2">
+            {currentStep === 1 && renderGuestInfoStep()}
+            {currentStep === 2 && renderRoomSelectionStep()}
+            {currentStep === 3 && renderConfirmationStep()}
+          </div>
+
+          {/* Footer */}
+          <div className="mt-8 flex justify-between items-center pt-6 border-t border-gray-200/10">
+            {currentStep > 1 ? (
               <button
                 type="button"
-                className="back-button"
                 onClick={goToPreviousStep}
                 disabled={isSubmitting}
+                className={`px-6 py-3 rounded-xl font-medium transition-all flex items-center ${isDarkMode
+                  ? 'bg-gray-800 hover:bg-gray-700 text-gray-300'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                  }`}
               >
-                <i className="fas fa-chevron-left"></i>
-                Back
+                <FaChevronLeft className="mr-2 text-sm" /> Back
               </button>
+            ) : (
+              <div></div> // Spacer
             )}
-            
-            {currentStep < 3 && (
+
+            {currentStep < 3 ? (
               <button
                 type="button"
-                className="next-button"
                 onClick={goToNextStep}
+                className="px-8 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-lg shadow-blue-500/30 transition-all transform hover:-translate-y-0.5 flex items-center"
               >
-                Next
-                <i className="fas fa-chevron-right"></i>
+                Next Step <FaChevronRight className="ml-2 text-sm" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className={`px-8 py-3 rounded-xl font-semibold text-white shadow-lg transition-all transform hover:-translate-y-0.5 flex items-center ${isSubmitting
+                  ? 'bg-gray-500 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 shadow-green-500/30'
+                  }`}
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <FaClipboardCheck className="mr-2" /> Confirm Reservation
+                  </>
+                )}
               </button>
             )}
           </div>

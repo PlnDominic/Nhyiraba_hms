@@ -2,13 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
 import { useRestaurant } from '../../context/RestaurantContext';
-import { FaTimes, FaPlus, FaMinus, FaUtensils, FaSave } from 'react-icons/fa';
+import { useInventory } from '../../context/InventoryContext';
+import { FaTimes, FaPlus, FaMinus, FaUtensils, FaSave, FaSearch } from 'react-icons/fa';
 import supabase from '../../supabaseClient';
 import toast from 'react-hot-toast';
 
-const OrderModal = ({ isOpen, onClose, order = null }) => {
+const OrderModal = ({ isOpen, onClose, order = null, activeBar }) => {
   const { theme } = useTheme();
   const { menuItems } = useRestaurant();
+  const { processStockUsage } = useInventory();
   const isEditing = !!order;
 
   const [formData, setFormData] = useState({
@@ -20,30 +22,65 @@ const OrderModal = ({ isOpen, onClose, order = null }) => {
 
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [categories, setCategories] = useState([]);
+  const [guestOptions, setGuestOptions] = useState([]);
+  const [loadingGuests, setLoadingGuests] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch categories
+  // Fetch checked-in guests for room service orders
   useEffect(() => {
-    const fetchCategories = async () => {
+    const fetchGuests = async () => {
+      if (!isOpen) return;
+
+      setLoadingGuests(true);
       try {
-        const { data, error } = await supabase
-          .from('restaurant_categories')
-          .select('*')
-          .order('name');
-        
-        if (error) throw error;
-        setCategories(data || []);
-        if (data && data.length > 0) {
-          setSelectedCategory(data[0].id);
+        // Get active guests (checked in but not checked out)
+        let { data: guests, error: guestError } = await supabase
+          .from('guests')
+          .select('id, name, room, check_in, check_out')
+          .or('status.eq.checked_in,status.eq.Checked In');
+
+        if (guestError) throw guestError;
+
+        // Filter guests who have room assignments
+        guests = (guests || []).filter(guest => {
+          const hasRoom = guest.room && String(guest.room).trim() !== '';
+          return hasRoom;
+        });
+
+        // Fetch room names for all guests with room assignments
+        const roomNumbers = guests.map(guest => guest.room).filter(room => room);
+        if (roomNumbers.length > 0) {
+          const { data: roomsData, error: roomsError } = await supabase
+            .from('rooms')
+            .select('room_number, name')
+            .in('room_number', roomNumbers);
+
+          if (!roomsError && roomsData) {
+            // Create a mapping of room number to room name
+            const roomMap = {};
+            roomsData.forEach(room => {
+              roomMap[room.room_number] = room.name || room.room_number;
+            });
+
+            // Add room_name to each guest
+            guests = guests.map(guest => ({
+              ...guest,
+              room_name: roomMap[guest.room] || guest.room
+            }));
+          }
         }
+
+        setGuestOptions(guests || []);
       } catch (error) {
-        console.error('Error fetching categories:', error);
+        console.error('Error fetching guests:', error);
+        toast.error('Failed to load guest list');
+      } finally {
+        setLoadingGuests(false);
       }
     };
 
-    fetchCategories();
-  }, []);
+    fetchGuests();
+  }, [isOpen]);
 
   // Initialize form with order data when editing
   useEffect(() => {
@@ -69,6 +106,7 @@ const OrderModal = ({ isOpen, onClose, order = null }) => {
       });
     }
     setErrors({});
+    setSearchQuery(''); // Reset search query when modal opens/closes
   }, [order, isOpen]);
 
   const handleChange = (e) => {
@@ -77,7 +115,7 @@ const OrderModal = ({ isOpen, onClose, order = null }) => {
       ...prev,
       [name]: value
     }));
-    
+
     // Clear error for this field when user starts typing
     if (errors[name]) {
       setErrors(prev => ({
@@ -93,10 +131,10 @@ const OrderModal = ({ isOpen, onClose, order = null }) => {
       toast.error("Cannot add item with missing price information");
       return;
     }
-    
+
     setFormData(prev => {
       const existingItemIndex = prev.items.findIndex(item => item.menu_item_id === menuItem.id);
-      
+
       if (existingItemIndex !== -1) {
         // Item already exists, increase quantity
         const updatedItems = [...prev.items];
@@ -126,7 +164,7 @@ const OrderModal = ({ isOpen, onClose, order = null }) => {
       removeItemFromOrder(index);
       return;
     }
-    
+
     setFormData(prev => {
       const updatedItems = [...prev.items];
       updatedItems[index] = {
@@ -157,24 +195,24 @@ const OrderModal = ({ isOpen, onClose, order = null }) => {
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (formData.order_type === 'room-service' && !formData.room_number) {
       newErrors.room_number = 'Room number is required for room service orders';
     }
-    
+
     if (formData.items.length === 0) {
       newErrors.items = 'Please add at least one item to the order';
     } else {
       // Check if any menu items are missing prices
-      const missingPrices = formData.items.some(item => 
+      const missingPrices = formData.items.some(item =>
         !item.menu_item || item.menu_item.price === undefined || item.menu_item.price === null
       );
-      
+
       if (missingPrices) {
         newErrors.items = 'Some items have missing price information';
       }
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -188,41 +226,44 @@ const OrderModal = ({ isOpen, onClose, order = null }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
-    
+
     setIsSubmitting(true);
-    
+
     try {
       // Calculate total from items
       const orderTotal = calculateTotal();
-      
+
       // Create order in database
       const orderData = {
         order_type: formData.order_type,
         price: orderTotal,
         room_number: formData.order_type === 'room-service' ? formData.room_number : null,
         notes: formData.notes,
-        status: 'pending',
+        status: 'completed',
         total_amount: orderTotal,
         created_at: new Date(),
-        updated_at: new Date()
+        updated_at: new Date(),
+        bar_location: activeBar // Save the bar location
       };
-      
+
       const { data: orderResult, error: orderError } = await supabase
         .from('restaurant_orders')
         .insert([orderData])
         .select();
-      
+
       if (orderError) throw orderError;
-      
+
+      const orderId = orderResult[0].id;
+
       // Create order items
       const orderItems = formData.items.map(item => {
         const unitPrice = item.menu_item?.price || 0;
         return {
-          order_id: orderResult[0].id,
+          order_id: orderId,
           menu_item_id: item.menu_item_id,
           quantity: item.quantity,
           unit_price: unitPrice,
@@ -230,13 +271,35 @@ const OrderModal = ({ isOpen, onClose, order = null }) => {
           notes: item.notes
         };
       });
-      
+
       const { error: itemsError } = await supabase
         .from('restaurant_order_items')
         .insert(orderItems);
-      
+
       if (itemsError) throw itemsError;
-      
+
+      // Process Stock Deduction
+      if (activeBar) {
+        const stockUsageData = [];
+        formData.items.forEach(item => {
+          if (item.menu_item && item.menu_item.inventory_item_id) {
+            const qtyNeeded = item.menu_item.inventory_quantity_needed || 1;
+            const totalDeduct = qtyNeeded * item.quantity;
+
+            stockUsageData.push({
+              inventory_item_id: item.menu_item.inventory_item_id,
+              quantity: totalDeduct,
+              department_name: activeBar,
+              reference: `Order #${orderId.substring(0, 8)}`
+            });
+          }
+        });
+
+        if (stockUsageData.length > 0) {
+          await processStockUsage(stockUsageData);
+        }
+      }
+
       toast.success('Order placed successfully!');
       onClose();
     } catch (error) {
@@ -247,9 +310,26 @@ const OrderModal = ({ isOpen, onClose, order = null }) => {
     }
   };
 
-  const filteredMenuItems = selectedCategory 
-    ? menuItems.filter(item => item.category_id === selectedCategory)
-    : menuItems;
+  const filteredMenuItems = menuItems.filter(item => {
+    // Strict filtering by active bar
+    let matchesBar = true;
+    if (activeBar) {
+      // If the item has a specific location, it must match the active bar
+      if (item.bar_location) {
+        matchesBar = item.bar_location === activeBar;
+      } else {
+        // If the item has NO location, it defaults to 'VIP pub'
+        // So it should only be shown if the active bar is 'VIP pub'
+        matchesBar = activeBar === 'VIP pub';
+      }
+    }
+
+    // Filter by search query
+    const matchesSearch = searchQuery.trim() === '' || 
+      item.name.toLowerCase().includes(searchQuery.toLowerCase());
+
+    return matchesBar && matchesSearch;
+  });
 
   return (
     <AnimatePresence>
@@ -264,35 +344,33 @@ const OrderModal = ({ isOpen, onClose, order = null }) => {
               className="fixed inset-0 bg-black"
               onClick={onClose}
             />
-            
+
             {/* Modal */}
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ type: 'spring', damping: 20 }}
-              className={`relative w-full max-w-4xl p-6 rounded-lg shadow-xl ${
-                theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'
-              }`}
+              className={`relative w-full max-w-4xl p-6 rounded-lg shadow-xl ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'
+                }`}
             >
               {/* Header */}
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center">
                   <FaUtensils className={`text-xl mr-3 ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`} />
                   <h2 className="text-xl font-bold">
-                    {isEditing ? 'Edit Order' : 'Place New Order'}
+                    {isEditing ? 'Edit Order' : `Place New Order - ${activeBar || 'General'}`}
                   </h2>
                 </div>
                 <button
                   onClick={onClose}
-                  className={`p-2 rounded-full ${
-                    theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-                  }`}
+                  className={`p-2 rounded-full ${theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                    }`}
                 >
                   <FaTimes />
                 </button>
               </div>
-              
+
               {/* Form */}
               <form onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -306,40 +384,61 @@ const OrderModal = ({ isOpen, onClose, order = null }) => {
                         name="order_type"
                         value={formData.order_type}
                         onChange={handleChange}
-                        className={`w-full px-3 py-2 rounded-lg ${
-                          theme === 'dark'
-                            ? 'bg-gray-700 border-gray-600'
-                            : 'bg-white border-gray-300'
-                        } border`}
+                        className={`w-full px-3 py-2 rounded-lg ${theme === 'dark'
+                          ? 'bg-gray-700 border-gray-600'
+                          : 'bg-white border-gray-300'
+                          } border`}
                       >
                         <option value="dine-in">Dine-in</option>
                         <option value="room-service">Room Service</option>
                         <option value="takeaway">Takeaway</option>
                       </select>
                     </div>
-                    
+
                     {formData.order_type === 'room-service' && (
                       <div>
                         <label className="block mb-1 font-medium">
-                          Room Number <span className="text-red-500">*</span>
+                          Select Guest & Room <span className="text-red-500">*</span>
                         </label>
-                        <input
-                          type="number"
-                          name="room_number"
-                          value={formData.room_number}
-                          onChange={handleChange}
-                          className={`w-full px-3 py-2 rounded-lg ${
-                            theme === 'dark'
-                              ? 'bg-gray-700 border-gray-600'
-                              : 'bg-white border-gray-300'
-                          } border ${errors.room_number ? 'border-red-500' : ''}`}
-                        />
+                        {loadingGuests ? (
+                          <div className={`w-full px-3 py-2 rounded-lg border ${theme === 'dark'
+                            ? 'bg-gray-700 border-gray-600'
+                            : 'bg-white border-gray-300'
+                            } flex items-center justify-center`}>
+                            <i className="fas fa-spinner fa-spin mr-2"></i> Loading guests...
+                          </div>
+                        ) : guestOptions.length === 0 ? (
+                          <div className={`w-full px-3 py-2 rounded-lg border ${theme === 'dark'
+                            ? 'bg-gray-700 border-gray-600'
+                            : 'bg-white border-gray-300'
+                            } text-center`}>
+                            <p className="text-gray-500">No checked-in guests available</p>
+                            <p className="text-xs text-gray-400 mt-1">Guests must be checked in with a room assignment</p>
+                          </div>
+                        ) : (
+                          <select
+                            name="room_number"
+                            value={formData.room_number}
+                            onChange={handleChange}
+                            className={`w-full px-3 py-2 rounded-lg ${theme === 'dark'
+                              ? 'bg-gray-700 border-gray-600 text-white'
+                              : 'bg-white border-gray-300 text-gray-900'
+                              } border ${errors.room_number ? 'border-red-500' : ''}`}
+                          >
+                            <option value="">-- Select Guest & Room --</option>
+                            {guestOptions.map(guest => (
+                              <option key={guest.id} value={guest.room}>
+                                {guest.name} - Room {guest.room_name || guest.room}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                         {errors.room_number && (
                           <p className="mt-1 text-sm text-red-500">{errors.room_number}</p>
                         )}
                       </div>
                     )}
-                    
+
                     <div>
                       <label className="block mb-1 font-medium">
                         Order Notes
@@ -349,42 +448,39 @@ const OrderModal = ({ isOpen, onClose, order = null }) => {
                         value={formData.notes}
                         onChange={handleChange}
                         rows="2"
-                        className={`w-full px-3 py-2 rounded-lg ${
-                          theme === 'dark'
-                            ? 'bg-gray-700 border-gray-600'
-                            : 'bg-white border-gray-300'
-                        } border`}
+                        className={`w-full px-3 py-2 rounded-lg ${theme === 'dark'
+                          ? 'bg-gray-700 border-gray-600'
+                          : 'bg-white border-gray-300'
+                          } border`}
                         placeholder="Special instructions"
                       />
                     </div>
-                    
+
                     {/* Selected Items */}
                     <div>
                       <h3 className="block mb-3 font-medium tracking-wide uppercase text-sm">Order Items</h3>
                       {formData.items.length === 0 ? (
-                        <div className={`p-6 text-center rounded-lg ${
-                          theme === 'dark' 
-                            ? 'bg-gray-800/80 border border-gray-700/50 backdrop-blur-sm' 
-                            : 'bg-white/90 border border-gray-200/50 shadow-sm backdrop-blur-sm'
-                        }`}>
+                        <div className={`p-6 text-center rounded-lg ${theme === 'dark'
+                          ? 'bg-gray-800/80 border border-gray-700/50 backdrop-blur-sm'
+                          : 'bg-white/90 border border-gray-200/50 shadow-sm backdrop-blur-sm'
+                          }`}>
                           <p className="opacity-80">No items added to order</p>
                           <p className="text-xs mt-1 opacity-60">Click on menu items to add them to your order</p>
                         </div>
                       ) : (
                         <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
                           {formData.items.map((item, index) => (
-                            <motion.div 
+                            <motion.div
                               key={index}
                               initial={{ opacity: 0, y: 10 }}
                               animate={{ opacity: 1, y: 0 }}
                               exit={{ opacity: 0, x: -10 }}
                               whileHover={{ scale: 1.01 }}
                               transition={{ duration: 0.2 }}
-                              className={`p-3 rounded-lg relative overflow-hidden ${
-                                theme === 'dark' 
-                                  ? 'bg-gray-800/80 hover:bg-gray-800 border border-gray-700/50 backdrop-blur-sm' 
-                                  : 'bg-white/90 hover:bg-white border border-gray-200/50 shadow-sm backdrop-blur-sm'
-                              }`}
+                              className={`p-3 rounded-lg relative overflow-hidden ${theme === 'dark'
+                                ? 'bg-gray-800/80 hover:bg-gray-800 border border-gray-700/50 backdrop-blur-sm'
+                                : 'bg-white/90 hover:bg-white border border-gray-200/50 shadow-sm backdrop-blur-sm'
+                                }`}
                             >
                               <div className="flex justify-between items-center">
                                 <div className="flex-1">
@@ -397,11 +493,10 @@ const OrderModal = ({ isOpen, onClose, order = null }) => {
                                         whileHover={{ scale: 1.1 }}
                                         whileTap={{ scale: 0.9 }}
                                         onClick={() => updateItemQuantity(index, item.quantity - 1)}
-                                        className={`p-1 rounded-full ${
-                                          theme === 'dark' 
-                                            ? 'hover:bg-gray-700 text-blue-400' 
-                                            : 'hover:bg-blue-100 text-blue-600'
-                                        }`}
+                                        className={`p-1 rounded-full ${theme === 'dark'
+                                          ? 'hover:bg-gray-700 text-blue-400'
+                                          : 'hover:bg-blue-100 text-blue-600'
+                                          }`}
                                       >
                                         <FaMinus className="text-xs" />
                                       </motion.button>
@@ -411,18 +506,17 @@ const OrderModal = ({ isOpen, onClose, order = null }) => {
                                         whileHover={{ scale: 1.1 }}
                                         whileTap={{ scale: 0.9 }}
                                         onClick={() => updateItemQuantity(index, item.quantity + 1)}
-                                        className={`p-1 rounded-full ${
-                                          theme === 'dark' 
-                                            ? 'hover:bg-gray-700 text-blue-400' 
-                                            : 'hover:bg-blue-100 text-blue-600'
-                                        }`}
+                                        className={`p-1 rounded-full ${theme === 'dark'
+                                          ? 'hover:bg-gray-700 text-blue-400'
+                                          : 'hover:bg-blue-100 text-blue-600'
+                                          }`}
                                       >
                                         <FaPlus className="text-xs" />
                                       </motion.button>
                                     </div>
                                     <span className={`font-medium text-sm px-2 py-1 rounded-md
-                                      ${theme === 'dark' 
-                                        ? 'bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-800/30' 
+                                      ${theme === 'dark'
+                                        ? 'bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-800/30'
                                         : 'bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100'}`}>
                                       GH₵{(item.menu_item?.price * item.quantity).toFixed(2)}
                                     </span>
@@ -433,11 +527,10 @@ const OrderModal = ({ isOpen, onClose, order = null }) => {
                                   whileHover={{ scale: 1.1, rotate: 90 }}
                                   whileTap={{ scale: 0.9 }}
                                   onClick={() => removeItemFromOrder(index)}
-                                  className={`p-1.5 rounded-full self-start ${
-                                    theme === 'dark' 
-                                      ? 'hover:bg-red-900/30 text-red-400 border border-red-800/30' 
-                                      : 'hover:bg-red-100 text-red-500 border border-red-200'
-                                  }`}
+                                  className={`p-1.5 rounded-full self-start ${theme === 'dark'
+                                    ? 'hover:bg-red-900/30 text-red-400 border border-red-800/30'
+                                    : 'hover:bg-red-100 text-red-500 border border-red-200'
+                                    }`}
                                 >
                                   <FaTimes className="text-xs" />
                                 </motion.button>
@@ -449,91 +542,66 @@ const OrderModal = ({ isOpen, onClose, order = null }) => {
                       {errors.items && (
                         <p className="mt-1 text-sm text-red-500">{errors.items}</p>
                       )}
-                      
-                      <motion.div 
+
+                      <motion.div
                         whileHover={{ scale: 1.01 }}
-                        className={`mt-4 p-4 rounded-lg font-medium flex justify-between items-center ${
-                          theme === 'dark'
-                            ? 'bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-800/20 shadow-lg shadow-blue-900/5'
-                            : 'bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 shadow-lg shadow-blue-900/5'
-                        }`}
+                        className={`mt-4 p-4 rounded-lg font-medium flex justify-between items-center ${theme === 'dark'
+                          ? 'bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-800/20 shadow-lg shadow-blue-900/5'
+                          : 'bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 shadow-lg shadow-blue-900/5'
+                          }`}
                       >
                         <span className="text-sm uppercase tracking-wide opacity-80">Total Amount</span>
                         <span className="text-lg font-bold">GH₵{calculateTotal().toFixed(2)}</span>
                       </motion.div>
                     </div>
                   </div>
-                  
+
                   {/* Right Column - Menu Items */}
                   <div>
-                    <div className="mb-4">
-                      <h3 className="block mb-3 font-medium tracking-wide uppercase text-sm">
-                        Categories
-                      </h3>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        <motion.button
-                          type="button"
-                          onClick={() => setSelectedCategory('')}
-                          whileHover={{ scale: 1.03 }}
-                          whileTap={{ scale: 0.97 }}
-                          className={`relative overflow-hidden rounded-lg py-2 px-3 text-center ${
-                            selectedCategory === '' 
-                              ? (theme === 'dark' 
-                                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/20'  
-                                : 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-300/30') 
-                              : (theme === 'dark'
-                                ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' 
-                                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200')
-                          }`}
-                        >
-                          {selectedCategory === '' && (
-                            <motion.span 
-                              className="absolute inset-0 bg-white opacity-10"
-                              initial={{ x: '-100%' }}
-                              animate={{ x: '100%' }}
-                              transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-                            />
-                          )}
-                          <span className="font-medium relative z-10">All Items</span>
-                        </motion.button>
-                        
-                        {categories.map(category => (
-                          <motion.button
-                            key={category.id}
-                            type="button"
-                            onClick={() => setSelectedCategory(category.id)}
-                            whileHover={{ scale: 1.03 }}
-                            whileTap={{ scale: 0.97 }}
-                            className={`relative overflow-hidden rounded-lg py-2 px-3 text-center ${
-                              selectedCategory === category.id 
-                                ? (theme === 'dark' 
-                                  ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/20'  
-                                  : 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-300/30') 
-                                : (theme === 'dark'
-                                  ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' 
-                                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200')
-                            }`}
-                          >
-                            {selectedCategory === category.id && (
-                              <motion.span 
-                                className="absolute inset-0 bg-white opacity-10"
-                                initial={{ x: '-100%' }}
-                                animate={{ x: '100%' }}
-                                transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-                              />
-                            )}
-                            <span className="font-medium relative z-10">{category.name}</span>
-                          </motion.button>
-                        ))}
+                    <h3 className="block mb-3 font-medium tracking-wide uppercase text-sm">
+                      Menu Items
+                    </h3>
+
+                    {/* Search Input */}
+                    <div className="mb-3 relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <FaSearch className={`${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`} />
                       </div>
+                      <input
+                        type="text"
+                        placeholder="Search menu items..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className={`w-full pl-10 pr-4 py-2.5 rounded-lg border transition-all duration-200 ${theme === 'dark'
+                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
+                          : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
+                          } focus:outline-none`}
+                      />
+                      {searchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchQuery('')}
+                          className={`absolute inset-y-0 right-0 pr-3 flex items-center ${theme === 'dark' ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                          <FaTimes />
+                        </button>
+                      )}
                     </div>
-                    
-                    <div className={`h-[400px] overflow-y-auto p-3 rounded-lg ${
-                      theme === 'dark' ? 'bg-gray-700/70 backdrop-blur-sm' : 'bg-gray-100/80 backdrop-blur-sm'
-                    } border border-gray-700/20 shadow-inner`}>
+
+                    <div className={`h-[400px] overflow-y-auto p-3 rounded-lg ${theme === 'dark' ? 'bg-gray-700/70 backdrop-blur-sm' : 'bg-gray-100/80 backdrop-blur-sm'
+                      } border border-gray-700/20 shadow-inner`}>
                       {filteredMenuItems.length === 0 ? (
-                        <div className="p-4 text-center">
-                          <p>No menu items found</p>
+                        <div className={`p-6 text-center rounded-lg ${theme === 'dark' ? 'bg-gray-800/50' : 'bg-white/50'}`}>
+                          <FaSearch className={`mx-auto mb-3 text-3xl ${theme === 'dark' ? 'text-gray-600' : 'text-gray-400'}`} />
+                          <p className="font-medium mb-1">
+                            {searchQuery ? 'No items match your search' : 'No menu items found'}
+                          </p>
+                          {searchQuery && (
+                            <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                              Try searching with different keywords
+                            </p>
+                          )}
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 gap-3">
@@ -543,11 +611,10 @@ const OrderModal = ({ isOpen, onClose, order = null }) => {
                               onClick={() => addItemToOrder(item)}
                               whileHover={{ scale: 1.02 }}
                               whileTap={{ scale: 0.98 }}
-                              className={`p-3 rounded-lg cursor-pointer flex justify-between items-center ${
-                                theme === 'dark' 
-                                  ? 'bg-gray-800/80 hover:bg-gradient-to-r hover:from-blue-900/50 hover:to-purple-900/50 backdrop-blur-sm border border-gray-700/50' 
-                                  : 'bg-white/90 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 backdrop-blur-sm border border-gray-200/50 shadow-sm'
-                              } transition-all duration-200`}
+                              className={`p-3 rounded-lg cursor-pointer flex justify-between items-center ${theme === 'dark'
+                                ? 'bg-gray-800/80 hover:bg-gradient-to-r hover:from-blue-900/50 hover:to-purple-900/50 backdrop-blur-sm border border-gray-700/50'
+                                : 'bg-white/90 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 backdrop-blur-sm border border-gray-200/50 shadow-sm'
+                                } transition-all duration-200`}
                             >
                               <div>
                                 <h4 className="font-medium">{item.name}</h4>
@@ -561,11 +628,10 @@ const OrderModal = ({ isOpen, onClose, order = null }) => {
                                   type="button"
                                   whileHover={{ scale: 1.1, rotate: 90 }}
                                   whileTap={{ scale: 0.9 }}
-                                  className={`ml-1 p-1.5 rounded-full ${
-                                    theme === 'dark' 
-                                      ? 'bg-gradient-to-tr from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500' 
-                                      : 'bg-gradient-to-tr from-blue-500 to-indigo-500 hover:from-blue-400 hover:to-indigo-400'
-                                  } text-white shadow-md`}
+                                  className={`ml-1 p-1.5 rounded-full ${theme === 'dark'
+                                    ? 'bg-gradient-to-tr from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500'
+                                    : 'bg-gradient-to-tr from-blue-500 to-indigo-500 hover:from-blue-400 hover:to-indigo-400'
+                                    } text-white shadow-md`}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     addItemToOrder(item);
@@ -581,7 +647,7 @@ const OrderModal = ({ isOpen, onClose, order = null }) => {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Form Actions */}
                 <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
                   <motion.button
@@ -589,11 +655,10 @@ const OrderModal = ({ isOpen, onClose, order = null }) => {
                     onClick={onClose}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    className={`px-4 py-2 rounded-lg ${
-                      theme === 'dark'
-                        ? 'bg-gray-700 hover:bg-gray-600 text-white'
-                        : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
-                    }`}
+                    className={`px-4 py-2 rounded-lg ${theme === 'dark'
+                      ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                      : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
+                      }`}
                     disabled={isSubmitting}
                   >
                     Cancel
@@ -602,11 +667,10 @@ const OrderModal = ({ isOpen, onClose, order = null }) => {
                     type="submit"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    className={`px-5 py-2 rounded-lg flex items-center ${
-                      theme === 'dark'
-                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-700/20'
-                        : 'bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-400 hover:to-indigo-400 text-white shadow-lg shadow-blue-500/20'
-                    }`}
+                    className={`px-5 py-2 rounded-lg flex items-center ${theme === 'dark'
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-700/20'
+                      : 'bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-400 hover:to-indigo-400 text-white shadow-lg shadow-blue-500/20'
+                      }`}
                     disabled={isSubmitting}
                   >
                     <FaSave className="mr-2" />

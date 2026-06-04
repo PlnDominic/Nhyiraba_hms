@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
+import NotificationPermissionPrompt from './NotificationPermissionPrompt';
 import { useTheme } from '../context/ThemeContext';
 
 /**
@@ -15,16 +16,38 @@ import { useTheme } from '../context/ThemeContext';
 const DashboardLayout = ({ children, activeLink, title }) => {
   const { theme } = useTheme();
   const isDarkMode = theme === 'dark';
+  // Initialize sidebar state based on screen width
+  // Default to closed on mobile (< 768px), open on desktop
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth >= 768;
+    }
+    return true; // Default to open for SSR/initial render
+  });
+
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
+  };
 
   return (
     <div className={`flex h-screen ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-800'}`}>
-      <Sidebar activeLink={activeLink} />
+      <Sidebar
+        activeLink={activeLink}
+        isOpen={sidebarOpen}
+        toggleSidebar={toggleSidebar}
+      />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Navbar title={title} />
+        <Navbar
+          title={title}
+          toggleSidebar={toggleSidebar}
+          isSidebarOpen={sidebarOpen}
+        />
         <main className="flex-1 overflow-y-auto p-6">
           {children}
         </main>
       </div>
+      {/* Notification Permission Prompt */}
+      <NotificationPermissionPrompt />
     </div>
   );
 };

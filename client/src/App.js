@@ -1,5 +1,6 @@
-import React, { Suspense, lazy, useEffect, useMemo } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
+import SplashScreen from './components/SplashScreen';
 import { UserProvider } from './context/UserContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { RoomReservationProvider } from './context/RoomReservationContext';
@@ -10,6 +11,7 @@ import { ReservationProvider } from './context/ReservationContext';
 import { StaffProvider } from './context/StaffContext';
 import { InventoryProvider } from './context/InventoryContext';
 import { RestaurantProvider } from './context/RestaurantContext';
+import { NotificationProvider } from './context/NotificationContext';
 import Home from './pages/Home';
 import RoomsPage from './components/RoomsPage';
 import ReservationsPage from './components/ReservationsPage';
@@ -40,11 +42,15 @@ const StaffPage = lazy(() => import('./components/StaffPage'));
 const StaffTimeAttendancePage = lazy(() => import('./components/staff/StaffTimeAttendancePage'));
 const InventoryPage = lazy(() => import('./components/inventory/InventoryPage'));
 const RestaurantPage = lazy(() => import('./components/restaurant/RestaurantPage'));
+const SupermarketPage = lazy(() => import('./components/supermarket/SupermarketPage'));
+const PoolPage = lazy(() => import('./components/PoolPage'));
+const PoolCheckInForm = lazy(() => import('./components/pool/PoolCheckInForm'));
 const OfflineDatabaseTest = lazy(() => import('./components/OfflineDatabaseTest'));
 const SimpleDatabaseTest = lazy(() => import('./components/SimpleDatabaseTest'));
 const OfflineRoomsManager = lazy(() => import('./components/OfflineRoomsManager'));
 const OfflineEnabledRoomsPage = lazy(() => import('./components/OfflineEnabledRoomsPage'));
 const OfflineEnabledDashboard = lazy(() => import('./components/OfflineEnabledDashboard'));
+const RevenuePage = lazy(() => import('./components/revenue/RevenuePage'));
 
 // Loading component for Suspense
 const LoadingFallback = () => (
@@ -59,6 +65,23 @@ const LoadingFallback = () => (
 
 const App = () => {
   const location = useLocation();
+  const [showSplash, setShowSplash] = useState(true);
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
+
+  // Check if this is the first load
+  useEffect(() => {
+    const hasSeenSplash = sessionStorage.getItem('hasSeenSplash');
+    if (hasSeenSplash) {
+      setShowSplash(false);
+      setIsFirstLoad(false);
+    }
+  }, []);
+
+  // Handle splash screen completion
+  const handleSplashComplete = () => {
+    setShowSplash(false);
+    sessionStorage.setItem('hasSeenSplash', 'true');
+  };
 
   // Preload critical components 
   useEffect(() => {
@@ -72,21 +95,21 @@ const App = () => {
   useEffect(() => {
     // Scroll to top when page changes
     window.scrollTo(0, 0);
-    
+
     // Clear any lingering tooltips or popovers
     const tooltips = document.querySelectorAll('.tooltip, .popover');
     if (tooltips.length) {
       tooltips.forEach(el => el.remove());
     }
-    
+
     // Remove the forced redraw which can cause flickering
     // document.body.style.display = 'none';
     // const reflow = document.body.offsetHeight; 
     // document.body.style.display = '';
-    
+
     // Add instant transition to body to prevent FOUC
     document.body.classList.add('no-transition');
-    
+
     // Remove the class after a short delay
     setTimeout(() => {
       document.body.classList.remove('no-transition');
@@ -97,10 +120,11 @@ const App = () => {
   const routes = useMemo(() => (
     <Routes>
       <Route path="/" element={<Home key="home-route" />} />
+      <Route path="/pool-checkin" element={<PoolCheckInForm />} />
       <Route path="/landing" element={<LandingPage key="landing-route" />} />
       <Route path="/login" element={<LoginPage key="login-route" />} />
       <Route path="/request-access" element={<RequestAccessPage key="request-access-route" />} />
-      
+
       {/* Protected Routes - Add key prop for forced re-rendering */}
       <Route path="/dashboard" element={
         <ProtectedRoute>
@@ -152,6 +176,11 @@ const App = () => {
           <ReportsPage key="reports" />
         </ProtectedRoute>
       } />
+      <Route path="/revenue" element={
+        <ProtectedRoute>
+          <RevenuePage key="revenue" />
+        </ProtectedRoute>
+      } />
       <Route path="/profile" element={
         <ProtectedRoute>
           <ConditionalProfileModal key="profile" />
@@ -177,76 +206,95 @@ const App = () => {
           <TestAccessRequests key="test-access" />
         </ProtectedRoute>
       } />
-      <Route path="/staff/time-attendance" element={
+      <Route path="/time-attendance" element={
         <ProtectedRoute>
           <StaffTimeAttendancePage key="time-attendance" />
         </ProtectedRoute>
       } />
       <Route path="/restaurant" element={
         <ProtectedRoute>
-          <RestaurantPage key="restaurant" />
+          <RestaurantPage />
         </ProtectedRoute>
       } />
-      
+
+      <Route path="/supermarket" element={
+        <ProtectedRoute>
+          <SupermarketPage />
+        </ProtectedRoute>
+      } />
+
+      <Route path="/pool" element={
+        <ProtectedRoute>
+          <PoolPage />
+        </ProtectedRoute>
+      } />
+
       <Route path="/offline-test" element={
         <OfflineDatabaseTest key="offline-test" />
       } />
-      
+
       <Route path="/simple-test" element={
         <SimpleDatabaseTest key="simple-test" />
       } />
-      
+
       <Route path="/offline-rooms" element={
         <OfflineRoomsManager key="offline-rooms" />
       } />
-      
+
       <Route path="/offline/rooms" element={
         <ProtectedRoute>
           <OfflineEnabledRoomsPage key="offline-rooms" />
         </ProtectedRoute>
       } />
-      
+
       <Route path="/offline/dashboard" element={
         <ProtectedRoute>
           <OfflineEnabledDashboard key="offline-dashboard" />
         </ProtectedRoute>
       } />
-      
+
       <Route path="/offline/*" element={
         <OfflineRoomsManager key="offline-hotel" />
       } />
-      
+
       <Route path="/setup-accounts" element={
         <RealAccountSetup key="setup-accounts" />
       } />
-      
+
       <Route path="/debug-user-context" element={
         <DebugUserContext key="debug-user-context" />
       } />
-      
+
       <Route path="/forgot-password" element={
         <ForgotPasswordPage key="forgot-password" />
       } />
-      
+
       <Route path="/reset-password" element={
         <ResetPasswordPage key="reset-password" />
       } />
-      
+
       <Route path="*" element={<NotFound key="not-found" />} />
     </Routes>
   ), []);
 
   return (
+    <>
+      {/* Show splash screen only on first load */}
+      {showSplash && isFirstLoad && (
+        <SplashScreen onComplete={handleSplashComplete} />
+      )}
+      
     <ThemeProvider>
       <UserProvider>
-        <RoomReservationProvider>
-          <RoomProvider>
-            <ReservationProvider>
-              <ModalProvider>
-                <GuestProvider>
-                  <StaffProvider>
-                    <InventoryProvider>
-                      <RestaurantProvider>
+        <NotificationProvider>
+          <RoomReservationProvider>
+            <RoomProvider>
+              <ReservationProvider>
+                <ModalProvider>
+                  <GuestProvider>
+                    <StaffProvider>
+                      <InventoryProvider>
+                        <RestaurantProvider>
                         <style jsx global>{`
                           .no-transition {
                             transition: none !important;
@@ -273,16 +321,18 @@ const App = () => {
                             },
                           },
                         }} />
-                      </RestaurantProvider>
-                    </InventoryProvider>
-                  </StaffProvider>
-                </GuestProvider>
-              </ModalProvider>
-            </ReservationProvider>
-          </RoomProvider>
-        </RoomReservationProvider>
+                        </RestaurantProvider>
+                      </InventoryProvider>
+                    </StaffProvider>
+                  </GuestProvider>
+                </ModalProvider>
+              </ReservationProvider>
+            </RoomProvider>
+          </RoomReservationProvider>
+        </NotificationProvider>
       </UserProvider>
     </ThemeProvider>
+    </>
   );
 };
 

@@ -377,7 +377,7 @@ const ReservationEditModal = ({ isOpen, onClose, reservation, onUpdate, rooms })
                 <option value="">Select a room</option>
                 {rooms && rooms.map(room => (
                   <option key={room.id} value={room.id}>
-                    {room.name || room.room_number} - {room.type}
+                    Room {room.room_number} - {room.type} (₵{room.price})
                   </option>
                 ))}
               </select>

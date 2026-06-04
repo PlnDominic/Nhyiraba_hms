@@ -3,12 +3,8 @@ import React from 'react';
 const RoomTooltip = ({ room, position, isDarkMode = true }) => {
   if (!room) return null;
   
-  // Calculate price display with Ghana Cedis
-  const priceDisplay = 
-    room.type === 'Standard' ? 'GH₵400' :
-    room.type === 'Superior' ? 'GH₵700' :
-    room.type === 'Executive' ? 'GH₵1,250' :
-    `GH₵${room.price}`;
+  // Display actual room price from database
+  const priceDisplay = `GH₵${room.price || 0}`;
   
   // Get status color classes
   const getStatusClasses = (status) => {

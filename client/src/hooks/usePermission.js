@@ -84,28 +84,25 @@ const usePermission = () => {
         'Services', 'Bar', 'Settings'
       ],
       'Housekeeping': [
-        'Dashboard', 'Tasks', 'Settings'
+        'Rooms', 'Tasks', 'Settings'
       ],
       'Food Beverage': [ // Both 'Food & Beverage' and 'Food Beverage' supported
-        'Restaurant', 'Bar', 'Systems', 'Settings', 'Inventory'
+        'Restaurant', 'Bar', 'Settings', 'Inventory', 'Pool'
       ],
       'Management': [
         'Dashboard', 'Reservations', 'Rooms', 'Guests', 'Staff',
         'Tasks', 'Billing', 'Services', 'Inventory', 'Bar',
-        'Reports', 'Settings', 'Staff Access', 'Systems', 'Pool', 'Supermarket'
+        'Reports', 'Settings', 'Staff Access', 'Pool', 'Supermarket'
       ],
       'Maintenance': [
         'Dashboard', 'Tasks', 'Services', 'Settings'
       ],
-      'Accounting': [
-        'Dashboard', 'Billing', 'Reports', 'Settings'
+      'Supermarket': [
+        'Supermarket', 'Time & Attendance', 'Settings'
       ],
       'Hr': [ // Human Resources
         'Dashboard', 'Staff', 'Reports', 'Settings', 'Staff Access'
       ],
-      'Supermarket': [
-        'Supermarket', 'Inventory', 'Settings'
-      ]
     };
 
     // Check if user's department has access to the page

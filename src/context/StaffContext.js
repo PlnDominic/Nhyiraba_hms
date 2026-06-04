@@ -4,6 +4,28 @@ import { toast } from 'react-hot-toast';
 
 const StaffContext = createContext();
 
+const sanitizeStaffPayload = (data) => {
+  const sanitized = { ...data };
+
+  if (typeof sanitized.hire_date === 'string') {
+    sanitized.hire_date = sanitized.hire_date.trim();
+  }
+  sanitized.hire_date = sanitized.hire_date ? sanitized.hire_date : null;
+
+  const normalizeNumber = (value) => {
+    if (value === '' || value === null || value === undefined) {
+      return null;
+    }
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
+
+  sanitized.hourly_rate = normalizeNumber(sanitized.hourly_rate);
+  sanitized.weekly_hours = normalizeNumber(sanitized.weekly_hours);
+
+  return sanitized;
+};
+
 export const StaffProvider = ({ children }) => {
   const [staff, setStaff] = useState([]);
   const [schedules, setSchedules] = useState([]);
@@ -192,9 +214,10 @@ export const StaffProvider = ({ children }) => {
   // Add a new staff member
   const addStaff = async (staffData) => {
     try {
+      const payload = sanitizeStaffPayload(staffData);
       const { data, error } = await supabase
         .from('staff')
-        .insert([staffData])
+        .insert([payload])
         .select();
 
       if (error) throw error;
@@ -211,9 +234,10 @@ export const StaffProvider = ({ children }) => {
   // Update a staff member
   const updateStaff = async (id, staffData) => {
     try {
+      const payload = sanitizeStaffPayload(staffData);
       const { data, error } = await supabase
         .from('staff')
-        .update(staffData)
+        .update(payload)
         .eq('id', id)
         .select();
 

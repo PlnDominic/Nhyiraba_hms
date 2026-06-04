@@ -57,7 +57,7 @@ const ProtectedRoute = ({ children }) => {
       'staff-access': 'Staff Access',
       'logout': 'Logout',
       'pool': 'Pool',
-      'systems': 'Systems'
+      'supermarket': 'Supermarket'
     };
 
     // Grant universal access to Time and Attendance page
@@ -95,6 +95,13 @@ const ProtectedRoute = ({ children }) => {
       if (pageName === 'Inventory' &&
         (currentUser.department === 'Housekeeping' ||
           currentUser.department === 'Food & Beverage')) {
+        setHasAccess(true);
+        setIsCheckingAccess(false);
+        return;
+      }
+
+      // Special case for Pool page - allow Food & Beverage staff
+      if (pageName === 'Pool' && currentUser.department === 'Food & Beverage') {
         setHasAccess(true);
         setIsCheckingAccess(false);
         return;
@@ -144,6 +151,8 @@ const ProtectedRoute = ({ children }) => {
         case 'hr':
         case 'human_resources':
           return '/staff';
+        case 'supermarket':
+          return '/supermarket';
         case 'front_desk':
         case 'management':
         default:

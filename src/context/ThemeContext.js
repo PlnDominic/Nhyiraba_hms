@@ -3,21 +3,15 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 const ThemeContext = createContext();
 
 export const ThemeProvider = ({ children }) => {
-    // Check if user has a theme preference in localStorage
+    // Default to light theme always
     const getInitialTheme = () => {
         if (typeof window !== 'undefined' && window.localStorage) {
             const savedTheme = localStorage.getItem('theme');
             if (savedTheme) {
                 return savedTheme;
             }
-            
-            // Check for user system preference
-            const userMedia = window.matchMedia('(prefers-color-scheme: dark)');
-            if (userMedia.matches) {
-                return 'dark';
-            }
         }
-        return 'dark'; // Default to dark theme
+        return 'light'; // Always default to light theme
     };
 
     const [theme, setTheme] = useState(getInitialTheme);

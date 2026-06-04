@@ -54,7 +54,6 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
     const newErrors = {};
     if (!formData.guestName.trim()) newErrors.guestName = 'Guest name is required';
     if (!formData.email.trim()) newErrors.email = 'Email is required';
-    if (!formData.phoneNumber.trim()) newErrors.phoneNumber = 'Phone number is required';
     if (!formData.roomNumber.trim()) newErrors.roomNumber = 'Room number is required';
     if (!formData.checkInDate) newErrors.checkInDate = 'Check-in date is required';
     if (!formData.checkOutDate) newErrors.checkOutDate = 'Check-out date is required';
@@ -177,6 +176,8 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
     onRequestClose();
   };
 
+  if (!isOpen) return null;
+
   return (
     <Modal
       isOpen={isOpen}
@@ -238,7 +239,7 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
               
               <div>
                 <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Phone Number*
+                  Phone Number (optional)
                 </label>
                 <input
                   type="tel"

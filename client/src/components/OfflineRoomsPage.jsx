@@ -84,8 +84,8 @@ const OfflineRoomsPage = () => {
     
     let filtered = [...rooms];
     
-    // Filter by room IDs from 101 to 109 which are our 9 rooms
-    filtered = filtered.filter(room => room && room.id >= 101 && room.id <= 109);
+    // Filter by room IDs from 1 to 15 which are our 15 rooms
+    filtered = filtered.filter(room => room && room.id >= 1 && room.id <= 15);
     
     // Sort rooms by ID
     filtered = filtered.sort((a, b) => a.id - b.id);

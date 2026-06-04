@@ -1,10 +1,247 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { useRoomReservation } from '../context/RoomReservationContext';
 import { useGuests } from '../context/GuestContext';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import supabase from '../supabaseClient';
 import { toast } from 'react-hot-toast';
+
+const AQUARIUM_ROOM_IDENTIFIERS = new Set(['1','2','3','4','5','6','7','8','9','10','11','12','13','14','01','02','03','04','05','06','07','08','09','010','011','012','013','014','101','102','103','104','105','106','107','108','109','110','111','112','113','114']);
+
+const sanitizeRoomReference = (value) => {
+  if (value === undefined || value === null) return null;
+  const str = value.toString().trim();
+  if (!str) return null;
+  return {
+    raw: str,
+    lower: str.toLowerCase(),
+    digits: str.replace(/[^0-9]/g, ''),
+  };
+};
+
+const normalizeRoomDigits = (value) => {
+  if (value === undefined || value === null) return '';
+  const digitsOnly = value.toString().replace(/[^0-9]/g, '');
+  return digitsOnly.replace(/^0+/, '') || digitsOnly;
+};
+
+const formatPriceValue = (value) => {
+  if (!Number.isFinite(value)) return '0';
+  const numericValue = Number(value);
+  return Number.isInteger(numericValue)
+    ? numericValue.toFixed(0)
+    : numericValue.toFixed(2);
+};
+
+const AQUARIUM_ROOM_IDENTIFIERS = new Set(['1','2','3','4','5','6','7','8','9','10','11','12','13','14','01','02','03','04','05','06','07','08','09','010','011','012','013','014','101','102','103','104','105','106','107','108','109','110','111','112','113','114']);
+const sanitizeRoomReference = (value) => {
+  if (value === undefined || value === null) return null;
+  const str = value.toString().trim();
+  if (!str) return null;
+  return {
+    raw: str,
+    lower: str.toLowerCase(),
+    digits: str.replace(/[^0-9]/g, ''),
+  };
+};
+
+','04','05','06','07','08','09','010','011','012','013','014','101','102','103','104','105','106','107','108','109','110','111','112','113','114']);
+IUM_ROOM_IDENTIFIERS = new Set(['1','2','3','4','5','6','7','8','9','10','11','12','13','14','01','02','03','04','05','06','07','08','09','010','011','012','013','014','101','102','103','104','105','106','107','108','109','110','111','112','113','114']);
+
+const sanitizeRoomReference = (value) => {
+  if (value === undefined || value === null) return null;
+  const str = value.toString().trim();
+  if (!str) return null;
+  return {
+    raw: str,
+    lower: str.toLowerCase(),
+    digits: str.replace(/[^0-9]/g, ''),
+  };
+};
+
+const normalizeRoomDigits = (value) => {
+  if (value === undefined || value === null) return '';
+  const digitsOnly = value.toString().replace(/[^0-9]/g, '');
+  return digitsOnly.replace(/^0+/, '') || digitsOnly;
+};
+
+const formatPriceValue = (value) => {
+  if (!Number.isFinite(value)) return '0';
+  const numericValue = Number(value);
+  return Number.isInteger(numericValue)
+    ? numericValue.toFixed(0)
+    : numericValue.toFixed(2);
+};
+
+
+const AQUARIUM_ROOM_IDENTIFIERS = new Set(['1','2','3','4','5','6','7','8','9','10','11','12','13','14','01','02','03','04','05','06','07','08','09','010','011','012','013','014','101','102','103','104','105','106','107','108','109','110','111','112','113','114']);
+const sanitizeRoomReference','03','04','05','06','07','08','09','010','011','012','013','014','101','102','103','104','105','106','107','108','109','110','111','112','113','114']);
+IUM_ROOM_IDENTIFIERS = new Set(['1','2','3','4','5','6','7','8','9','10','11','12','13','14','01','02','03','04','05','06','07','08','09','010','011','012','013','014','101','102','103','104','105','106','107','108','109','110','111','112','113','114']);
+const sanitizeRoomReference = (value) => {
+  if (value === undefined || value === null) return null;
+  const str = value.toString().trim();
+  if (!str) return null;
+  return {
+    raw: str,
+    lower: str.toLowerCase(),
+    digits: str.replace(/[^0-9]/g, ''),
+  };
+};
+
+const normalizeRoomDigits = (value) => {
+  if (!value) return '';
+  const digits = value.replace(/[^0-9]/g, '');
+  return digits.replace(/^0+/, '') || digits;
+};
+
+const formatPriceValue = (value) => {
+  if (!Number.isFinite(value)) return '0';
+  const numericValue = Number(value);
+  return Number.isInteger(numericValue)
+    ? numericValue.toFixed(0)
+    : numericValue.toFixed(2);
+};
+
+const InvoiceModal = (
+'3','4','5','6','7','8','9','10','11','12','13','14',
+  '01','02','03','04','05','06','07','08','09','010','011','012','013','014',
+  '101','102','103','104','105','106','107','108','109','110','111','112','113','114'
+]);
+
+const sanitizeRoomReference = (value) => {
+  if (value === undefined || value === null) return null;
+  const str = value.toString().trim();
+  if (!str) return null;
+  return {
+    raw: str,
+    lower: str.toLowerCase(),
+    digits: str.replace(/[^0-9]/g, ''),
+  };
+};
+
+const formatPriceValue = (value) => {
+  if (!Number.isFinite(value)) return '0';
+  const numericValue = Number(value);
+  return Number.isInteger(numericValue)
+    ? numericValue.toFixed(0)
+    : numericValue.toFixed(2);
+};
+
+const AQUARIUM_ROOM_IDENTIFIERS = new Set(['1','2','3','4','5','6','7','8','9','10','11','12','13','14','01','02','03','04','05','06','07','08','09','010','011','012','013','014','101','102','103','104','105','106','107','108','109','110','111','112','113','114']);
+const sanitizeRoomReference','03','04','05','06','07','08','09','010','011','012','013','014','101','102','103','104','105','106','107','108','109','110','111','112','113','114']);
+IUM_ROOM_IDENTIFIERS = new Set([IUM_ROOM_IDENTIFIERS = new Set(['1','2','3','4','5','6','7','8','9','10','11','12','13','14','01','02','03','04','05','06','07','08','09','010','011','012','013','014','101','102','103','104','105','106','107','108','109','110','111','112','113','114']);
+
+const sanitizeRoomReference = (value) => {
+  if (value === undefined || value === null) return null;
+  const str = value.toString().trim();
+  if (!str) return null;
+  return {
+    raw: str,
+    lower: str.toLowerCase(),
+    digits: str.replace(/[^0-9]/g, ''),
+  };
+};
+
+const normalizeRoomDigits = (value) => {
+  if (!value) return '';
+  const digits = value.replace(/[^0-9]/g, '');
+  return digits.replace(/^0+/, '') || digits;
+};
+
+const formatPriceValue = (value) => {
+  if (!Number.isFinite(value)) return '0';
+  const numericValue = Number(value);
+  return Number.isInteger(numericValue)
+    ? numericValue.toFixed(0)
+    : numericValue.toFixed(2);
+};
+
+const getRoomMetadata = (roomsList, entry) => {
+  const candidateValues = [
+    entry?.room_id,
+    entry?.room,
+    entry?.room_number,
+    entry?.room_name,
+    entry?.roomId,
+    entry?.roomNo,
+  ].filter(Boolean);
+
+  const normalizedCandidates = candidateValues.map(sanitizeRoomReference).filter(Boolean);
+  const roomList = Array.isArray(roomsList) ? roomsList : [];
+  let matchedRoom = null;
+
+  if (roomList.length) {
+    matchedRoom = roomList.find((room) => {
+      const comparables = [
+        room.id,
+        room.room_number,
+        room.name,
+        room.roomName,
+        `room ${room.room_number}`,
+        `room ${room.name}`,
+      ]
+        .filter(Boolean)
+        .map((val) => val.toString().trim().toLowerCase());
+
+      const roomDigits = [
+        room.id,
+        room.room_number,
+        room.name,
+        room.roomName,
+      ]
+        .filter(Boolean)
+        .map((val) => normalizeRoomDigits(val.toString()));
+
+      return normalizedCandidates.some(
+        (candidate) =>
+          (candidate.lower && comparables.includes(candidate.lower)) ||
+          (candidate.digits && roomDigits.includes(candidate.digits))
+      );
+    }) || null;
+  }
+
+  const candidateDigits =
+    normalizedCandidates.map((c) => c.digits).find((digits) => digits) || '';
+
+  const hasAquariumHint =
+    (matchedRoom?.block && matchedRoom.block.toLowerCase().includes('aquarium')) ||
+    AQUARIUM_ROOM_IDENTIFIERS.has(candidateDigits);
+
+  const blockLabel = matchedRoom?.block?.trim()
+    ? matchedRoom.block.trim()
+    : hasAquariumHint
+    ? 'Aquarium block'
+    : '';
+
+  const derivedPrice = Number(matchedRoom?.price);
+  const priceValue =
+    Number.isFinite(derivedPrice) && derivedPrice > 0
+      ? derivedPrice
+      : hasAquariumHint
+      ? 500
+      : 0;
+
+  const deriveRoomNumber = () => {
+    if (matchedRoom?.room_number) return matchedRoom.room_number.toString();
+    if (candidateDigits) return candidateDigits;
+    const firstRaw = normalizedCandidates[0]?.raw;
+    if (firstRaw) {
+      const digitsOnly = normalizeRoomDigits(firstRaw);
+      if (digitsOnly) return digitsOnly;
+      return firstRaw.replace(/room/gi, '').trim();
+    }
+    return '';
+  };
+
+  const roomNumberDisplay = deriveRoomNumber();
+
+  return {
+    room: matchedRoom,
+    blockLabel,
+    priceValue,
+    roomNumberDisplay,
+  };
+};
 
 const InvoiceModal = ({ isOpen, onClose, onCreateInvoice }) => {
   const { theme } = useTheme();
@@ -18,7 +255,6 @@ const InvoiceModal = ({ isOpen, onClose, onCreateInvoice }) => {
     roomNumber: '',
     checkIn: '',
     checkOut: '',
-    roomType: '',
     roomRate: 0,
     nights: 0,
     totalAmount: 0,
@@ -77,7 +313,6 @@ const InvoiceModal = ({ isOpen, onClose, onCreateInvoice }) => {
         roomNumber: '',
         checkIn: '',
         checkOut: '',
-        roomType: '',
         roomRate: 0,
         nights: 0,
         totalAmount: 0,
@@ -115,18 +350,22 @@ const InvoiceModal = ({ isOpen, onClose, onCreateInvoice }) => {
   // Handle guest selection
   const handleGuestSelect = async (guest) => {
     if (!guest) return;
+    const roomId = guest.room_id || guest.room;
+    const metadata = getRoomMetadata(rooms, guest);
     
     console.log("Handling guest selection for:", guest);
     
     // Get room details
-    const roomId = guest.room_id || guest.room;
     if (!roomId) {
       console.warn("No room ID found for guest:", guest);
       return;
     }
     
-    const room = rooms.find(r => r.id === parseInt(roomId, 10) || r.id === roomId);
-    console.log("Found room:", room);
+    
+    console.log("Resolved room metadata:", metadata);
+
+    const defaultRate = metadata.priceValue || (metadata.blockLabel ? 500 : 120);
+    const resolvedRoomNumber = metadata.roomNumberDisplay || roomId || guest.room || '';
     
     // Calculate dates and nights
     const checkInDate = guest.check_in_date || guest.checkIn || guest.check_in || new Date();
@@ -157,7 +396,7 @@ const InvoiceModal = ({ isOpen, onClose, onCreateInvoice }) => {
     const nights = differenceInDays(checkOutDateObj, checkInDateObj) || 1;
     
     // Calculate base room total
-    const roomRate = room ? room.price : 120; // Default price if not found
+    const roomRate = metadata.priceValue || defaultRate; // Default price if not found
     const roomTotal = roomRate * nights;
     
     // Get guest name for records
@@ -222,10 +461,9 @@ const InvoiceModal = ({ isOpen, onClose, onCreateInvoice }) => {
       // Update the invoice details
       setInvoiceDetails({
         guestName: guestName,
-        roomNumber: roomId,
+        roomNumber: resolvedRoomNumber,
         checkIn: formattedCheckIn,
         checkOut: formattedCheckOut,
-        roomType: room ? room.type : 'Standard',
         roomRate,
         nights,
         roomTotal,
@@ -237,7 +475,7 @@ const InvoiceModal = ({ isOpen, onClose, onCreateInvoice }) => {
       
       console.log("Invoice details updated:", {
         guest: guestName, 
-        room: roomId, 
+        room: resolvedRoomNumber, 
         nights, 
         roomTotal,
         serviceItems: serviceItems.length,
@@ -250,10 +488,9 @@ const InvoiceModal = ({ isOpen, onClose, onCreateInvoice }) => {
       // Set basic invoice details even if service requests fail
       setInvoiceDetails({
         guestName: guestName,
-        roomNumber: roomId,
+        roomNumber: resolvedRoomNumber,
         checkIn: formattedCheckIn,
         checkOut: formattedCheckOut,
-        roomType: room ? room.type : 'Standard',
         roomRate,
         nights,
         roomTotal,
@@ -280,7 +517,6 @@ const InvoiceModal = ({ isOpen, onClose, onCreateInvoice }) => {
       roomNumber: '',
       checkIn: '',
       checkOut: '',
-      roomType: '',
       roomRate: 0,
       nights: 0,
       totalAmount: 0,
@@ -344,7 +580,6 @@ const InvoiceModal = ({ isOpen, onClose, onCreateInvoice }) => {
             </div>
             <div className="row">
               <div className="label">Room Type:</div>
-              <div className="value">${invoiceDetails.roomType}</div>
             </div>
             <div className="row">
               <div className="label">Check-in Date:</div>
@@ -370,7 +605,7 @@ const InvoiceModal = ({ isOpen, onClose, onCreateInvoice }) => {
             </thead>
             <tbody>
               <tr>
-                <td>Room Charges (${invoiceDetails.roomType})</td>
+                <td>Room Charges</td>
                 <td>${invoiceDetails.checkIn} to ${invoiceDetails.checkOut}</td>
                 <td>GH₵${invoiceDetails.roomRate.toFixed(2)} x ${invoiceDetails.nights} nights = GH₵${invoiceDetails.roomTotal.toFixed(2)}</td>
               </tr>
@@ -563,7 +798,6 @@ const InvoiceModal = ({ isOpen, onClose, onCreateInvoice }) => {
         guest_id: selectedGuest.guest_id || selectedGuest.id || null,
         guest_name: invoiceDetails.guestName,
         room_number: invoiceDetails.roomNumber,
-        room_type: invoiceDetails.roomType,
         check_in_date: invoiceDetails.checkIn,
         check_out_date: invoiceDetails.checkOut,
         nights: invoiceDetails.nights,
@@ -643,7 +877,6 @@ const InvoiceModal = ({ isOpen, onClose, onCreateInvoice }) => {
         amount: invoiceDetails.totalAmount,
         status: invoiceDetails.paymentStatus,
         date: format(new Date(), 'yyyy-MM-dd'),
-        roomType: invoiceDetails.roomType,
         nights: invoiceDetails.nights,
         roomRate: invoiceDetails.roomRate,
         roomTotal: invoiceDetails.roomTotal,
@@ -676,7 +909,6 @@ const InvoiceModal = ({ isOpen, onClose, onCreateInvoice }) => {
         amount: invoiceDetails.totalAmount,
         status: invoiceDetails.paymentStatus,
         date: format(new Date(), 'yyyy-MM-dd'),
-        roomType: invoiceDetails.roomType,
         nights: invoiceDetails.nights,
         roomRate: invoiceDetails.roomRate,
         serviceItems: invoiceDetails.serviceItems,
@@ -764,9 +996,35 @@ const InvoiceModal = ({ isOpen, onClose, onCreateInvoice }) => {
                 {guestOptions.map((guest, index) => {
                   const guestId = guest.guest_id || guest.id || index;
                   const guestName = guest.guest_name || guest.name || 'Guest';
+                  const displayRoom = guest.room_name || guest.room_id || guest.room || '';
+                  const matchingRoom = rooms?.find(r => {
+                    const roomIdMatch = guest.room_id && r.id === guest.room_id;
+                    const roomNumberMatch = displayRoom && (r.room_number?.toString() === displayRoom.toString());
+                    return roomIdMatch || roomNumberMatch;
+                  });
+                  const rawBlock = matchingRoom?.block || guest.block || '';
+                  const normalizedBlock = rawBlock.toLowerCase();
+                  const isAquariumBlock = normalizedBlock.includes('aquarium') || normalizedBlock.includes('aquarian');
+                  const blockLabel = isAquariumBlock ? 'Aquarium block' : rawBlock.trim();
+                  const fallbackPrice = isAquariumBlock ? 500 : 0;
+                  const rawPrice = Number(matchingRoom?.price ?? guest.room_price ?? guest.roomRate);
+                  const hasValidPrice = Number.isFinite(rawPrice) && rawPrice > 0;
+                  const priceValue = hasValidPrice ? rawPrice : fallbackPrice;
+                  const sanitizedPrice = Number.isFinite(priceValue) && priceValue > 0 ? priceValue : 0;
+                  const priceDisplay = sanitizedPrice % 1 === 0 ? sanitizedPrice.toFixed(0) : sanitizedPrice.toFixed(2);
+                  const roomNumberDisplay = displayRoom || matchingRoom?.room_number || guest.room_number || guest.room_id || guest.room || '';
+                  const numericRoom = roomNumberDisplay.toString().replace(/[^\d]/g, '');
+                  const roomLabel = roomNumberDisplay ? `Room ${roomNumberDisplay}` : '';
+                  const extraDetails = [];
+                  if (blockLabel) extraDetails.push(blockLabel);
+                  if (sanitizedPrice || sanitizedPrice === 0) extraDetails.push(`${priceDisplay}`);
+                  const detailLabel = extraDetails.length ? ` (${extraDetails.join(' - ')})` : '';
                   return (
-                    <option key={index} value={guestId}>
-                      {guestName} {guest.room_id || guest.room ? ` - Room ${guest.room_id || guest.room}` : ''}
+                    <option key={index} value={guestId}
+                    >
+                      {guestName}
+                      {roomLabel ? ` - ${roomLabel}` : ''}
+                      {detailLabel}
                     </option>
                   );
                 })}
@@ -780,7 +1038,6 @@ const InvoiceModal = ({ isOpen, onClose, onCreateInvoice }) => {
                 <h3 className="font-medium mb-2">Guest Details</h3>
                 <p className="mb-1"><span className="font-medium">Name:</span> {invoiceDetails.guestName}</p>
                 <p className="mb-1"><span className="font-medium">Room:</span> {invoiceDetails.roomNumber}</p>
-                <p className="mb-1"><span className="font-medium">Room Type:</span> {invoiceDetails.roomType}</p>
               </div>
               <div>
                 <h3 className="font-medium mb-2">Stay Information</h3>

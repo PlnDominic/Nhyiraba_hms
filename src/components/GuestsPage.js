@@ -138,7 +138,6 @@ const GuestsPage = () => {
 
     const filteredGuests = guestList ? guestList.filter(guest => 
         guest.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (guest.email && guest.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (guest.phone && guest.phone.includes(searchTerm))
     ) : [];
 
@@ -237,7 +236,6 @@ const GuestsPage = () => {
                                     <thead>
                                         <tr className={`${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
                                             <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} uppercase tracking-wider`}>Name</th>
-                                            <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} uppercase tracking-wider`}>Email</th>
                                             <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} uppercase tracking-wider`}>Phone</th>
                                             <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} uppercase tracking-wider`}>Room</th>
                                             <th className={`px-6 py-3 text-left text-xs font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} uppercase tracking-wider`}>Check In</th>
@@ -259,8 +257,7 @@ const GuestsPage = () => {
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className={`px-6 py-4 whitespace-nowrap ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{guest.email || '-'}</td>
-                                                <td className={`px-6 py-4 whitespace-nowrap ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{guest.phone || '-'}</td>
+                                                    <td className={`px-6 py-4 whitespace-nowrap ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{guest.phone || '-'}</td>
                                                 <td className={`px-6 py-4 whitespace-nowrap ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{guest.room || '-'}</td>
                                                 <td className={`px-6 py-4 whitespace-nowrap ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                                                     {formatDate(guest.checkIn || guest.check_in)}

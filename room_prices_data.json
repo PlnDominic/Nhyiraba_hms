@@ -1,0 +1,212 @@
+[
+  {
+    "roomNumber": "R-001",
+    "price": 300,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-002",
+    "price": 300,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-003",
+    "price": 300,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-004",
+    "price": 300,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-005",
+    "price": 300,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-006",
+    "price": 300,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-007",
+    "price": 300,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-008",
+    "price": 300,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-009",
+    "price": 300,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-010",
+    "price": 300,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-011",
+    "price": 300,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-012",
+    "price": 300,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-013",
+    "price": 270,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-014",
+    "price": 250,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-015",
+    "price": 250,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-016",
+    "price": 250,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-017",
+    "price": 170,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-018",
+    "price": 170,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-019",
+    "price": 170,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-020",
+    "price": 170,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-021",
+    "price": 170,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-022",
+    "price": 170,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-023",
+    "price": 170,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-024",
+    "price": 170,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-025",
+    "price": 170,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-026",
+    "price": 170,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-027",
+    "price": 150,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-028",
+    "price": 150,
+    "block": "Main Block"
+  },
+  {
+    "roomNumber": "R-001",
+    "price": 500,
+    "block": "Aquarian Block"
+  },
+  {
+    "roomNumber": "R-002",
+    "price": 500,
+    "block": "Aquarian Block"
+  },
+  {
+    "roomNumber": "R-003",
+    "price": 500,
+    "block": "Aquarian Block"
+  },
+  {
+    "roomNumber": "R-004",
+    "price": 500,
+    "block": "Aquarian Block"
+  },
+  {
+    "roomNumber": "R-005",
+    "price": 500,
+    "block": "Aquarian Block"
+  },
+  {
+    "roomNumber": "R-006",
+    "price": 500,
+    "block": "Aquarian Block"
+  },
+  {
+    "roomNumber": "R-007",
+    "price": 500,
+    "block": "Aquarian Block"
+  },
+  {
+    "roomNumber": "R-008",
+    "price": 500,
+    "block": "Aquarian Block"
+  },
+  {
+    "roomNumber": "R-009",
+    "price": 500,
+    "block": "Aquarian Block"
+  },
+  {
+    "roomNumber": "R-010",
+    "price": 500,
+    "block": "Aquarian Block"
+  },
+  {
+    "roomNumber": "R-011",
+    "price": 500,
+    "block": "Aquarian Block"
+  },
+  {
+    "roomNumber": "R-012",
+    "price": 500,
+    "block": "Aquarian Block"
+  },
+  {
+    "roomNumber": "R-013",
+    "price": 500,
+    "block": "Aquarian Block"
+  },
+  {
+    "roomNumber": "R-014",
+    "price": 500,
+    "block": "Aquarian Block"
+  }
+]
