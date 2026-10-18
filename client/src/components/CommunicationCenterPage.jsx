@@ -17,7 +17,7 @@ const Field = ({ id, label, children }) => (
 
 const TEMPLATES = {
   arrival_reminder: { label: 'Arrival reminder', fields: ['checkInDate', 'roomNumber'], hint: 'Reminds the guest of their arrival date.' },
-  checkout_reminder: { label: 'Check-out reminder', fields: ['checkOutDate'], hint: 'Check-out is at 12:00 noon on the chosen date.' },
+  checkout_reminder: { label: 'Check-out reminder', fields: ['checkOutDate'], hint: 'Check-out is at 11:30 AM on the chosen date.' },
   payment_reminder: { label: 'Payment reminder', fields: ['amount'], hint: 'States the outstanding balance in GH₵.' },
   service_update: { label: 'Service update', fields: ['detail'], hint: 'Sends your update after a standard greeting.' },
   custom: { label: 'Custom message', fields: ['message'], hint: 'Your own text (max 320 characters).' }

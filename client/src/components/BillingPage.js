@@ -6,6 +6,7 @@ import { useRoomReservation } from '../context/RoomReservationContext';
 import supabase from '../supabaseClient';
 import { toast } from 'react-hot-toast';
 import { formatDate } from '../utils/dateUtils';
+import { sendInvoicePaymentSms } from '../services/smsService';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faMoneyBillWave, faFileInvoiceDollar, faCreditCard, faReceipt, faTrash, faEdit, faEye, faUndo, faTimes, faCheck } from '@fortawesome/free-solid-svg-icons';
 
@@ -50,6 +51,7 @@ const BillingPage = () => {
         // Convert Supabase data to our invoice format
         const formattedInvoices = data.map(invoice => ({
           id: invoice.id,
+          guestId: invoice.guest_id,
           guest: invoice.guest_name,
           room_number: invoice.room_number, // Store the original room number
           room: invoice.room_name || invoice.room_number, // Use room_name if available, fallback to room_number
@@ -146,6 +148,11 @@ const BillingPage = () => {
         // Update revenue stats if the invoice is marked as paid
         if (newInvoice.status === 'Paid') {
           updateRevenueStats(newInvoice.amount);
+          // Confirm by SMS, but not when an already-paid invoice is merely edited
+          const before = invoices.find(i => i.id === newInvoice.id);
+          if (!before || before.status !== 'Paid') {
+            sendInvoicePaymentSms(newInvoice, newInvoice.guestId);
+          }
         }
 
         // Refresh the entire invoice list to ensure database sync
@@ -235,6 +242,9 @@ const BillingPage = () => {
         toast.error(`Database update failed: ${updateError.message}. The change will only be reflected locally.`);
       } else {
         console.log(`Successfully updated invoice ${id} status to ${newStatus}`);
+        if (newStatus === 'Paid' && invoiceToUpdate.status !== 'Paid') {
+          sendInvoicePaymentSms(invoiceToUpdate, invoiceToUpdate.guestId);
+        }
         // Refresh invoices to ensure database sync
         fetchInvoices();
       }

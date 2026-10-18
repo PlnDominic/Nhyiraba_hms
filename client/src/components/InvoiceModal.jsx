@@ -1070,6 +1070,7 @@ const InvoiceModal = ({ isOpen, onClose, onCreateInvoice, invoiceToEdit }) => {
       // Create the formatted invoice for the parent component
       const formattedInvoice = {
         id: invoiceId,
+        guestId: invoiceDetails.guestId,
         guest: invoiceDetails.guestName,
         room: invoiceDetails.roomNumber,
         room_name: roomName || invoiceDetails.roomNumber, // Use the actual room name

@@ -43,6 +43,36 @@ export const reservationSmsData = (r = {}, extra = {}) => ({
   ...extra
 });
 
+// Invoice just marked Paid: text the guest a payment confirmation.
+// Invoices carry no phone number, so look it up from the guest record, then their reservation.
+export const sendInvoicePaymentSms = async (invoice = {}, guestId = null) => {
+  try {
+    let phone = null;
+    if (guestId != null && guestId !== '') {
+      const { data } = await supabase.from('guests').select('phone').eq('id', guestId).maybeSingle();
+      phone = data?.phone || null;
+    }
+    const name = invoice.guest || invoice.guest_name;
+    if (!phone && name) {
+      const { data } = await supabase.from('reservations').select('guest_phone')
+        .ilike('guest_name', name).not('guest_phone', 'is', null)
+        .order('created_at', { ascending: false }).limit(1);
+      phone = data?.[0]?.guest_phone || null;
+    }
+    if (!phone) return { success: false, skipped: true, error: 'No phone number on file' };
+
+    return sendSmsNotification('payment_received', phone, {
+      guestName: name,
+      amount: invoice.amount,
+      invoiceNumber: invoice.invoiceNumber || (invoice.id && !String(invoice.id).startsWith('local-') ? `#${String(invoice.id).slice(0, 8)}` : undefined),
+      roomNumber: invoice.room_number || invoice.room
+    });
+  } catch (error) {
+    console.warn('Payment SMS failed:', error.message);
+    return { success: false, error: error.message };
+  }
+};
+
 /**
  * Staff-initiated message. `event` is a server template (arrival_reminder,
  * checkout_reminder, payment_reminder, service_update) or 'custom' with data.message.

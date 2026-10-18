@@ -3,6 +3,7 @@
 
 const DEFAULT_API_URL = 'https://sms.arkesel.com/api/v2/sms/send';
 const HOTEL_NAME = process.env.HOTEL_NAME || 'Nhyiraba Hotel';
+const CHECKOUT_TIME = process.env.CHECKOUT_TIME || '11:30 AM';
 
 // Normalise Ghana numbers to international format without '+' (e.g. 233241234567)
 const normalizePhone = (raw) => {
@@ -32,17 +33,17 @@ const templates = {
   reservation_cancelled: (d) =>
     `Hello ${d.guestName}, your reservation at ${HOTEL_NAME} (Room ${d.roomNumber}, ${fmtDate(d.checkInDate)}) has been cancelled.${Number(d.fee) > 0 ? ` Cancellation fee: ${money(d.fee)}.` : ''}`,
   checked_in: (d) =>
-    `Welcome to ${HOTEL_NAME}, ${d.guestName}! You are checked in to Room ${d.roomNumber}. Check-out: ${fmtDate(d.checkOutDate)}. Enjoy your stay.`,
+    `Welcome to ${HOTEL_NAME}, ${d.guestName}! You are checked in to Room ${d.roomNumber}. Check-out: ${fmtDate(d.checkOutDate)} by ${CHECKOUT_TIME}. Enjoy your stay.`,
   checked_out: (d) =>
     `Thank you for staying at ${HOTEL_NAME}, ${d.guestName}. We hope to see you again soon!`,
   no_show: (d) =>
     `Hello ${d.guestName}, we did not see you for your reservation at ${HOTEL_NAME} on ${fmtDate(d.checkInDate)}, so it has been marked as a no-show. Please contact us to rebook.`,
   payment_received: (d) =>
-    `Hello ${d.guestName}, we received your payment of ${money(d.amount)} at ${HOTEL_NAME}. Thank you!`,
+    `Hello ${d.guestName}, we have received your payment of ${money(d.amount)}${d.invoiceNumber ? ` for invoice ${d.invoiceNumber}` : ''}${d.roomNumber ? ` (Room ${d.roomNumber})` : ''} at ${HOTEL_NAME}. Thank you!`,
   arrival_reminder: (d) =>
     `Hello ${d.guestName}, a reminder that your stay at ${HOTEL_NAME} begins on ${fmtDate(d.checkInDate)}${d.roomNumber ? ` (Room ${d.roomNumber})` : ''}. We look forward to welcoming you!`,
   checkout_reminder: (d) =>
-    `Hello ${d.guestName}, a reminder that check-out at ${HOTEL_NAME} is at 12:00 noon on ${fmtDate(d.checkOutDate)}. Please contact reception if you need a late check-out.`,
+    `Hello ${d.guestName}, a reminder that check-out at ${HOTEL_NAME} is at ${CHECKOUT_TIME} on ${fmtDate(d.checkOutDate)}. Please contact reception if you need a late check-out.`,
   payment_reminder: (d) =>
     `Hello ${d.guestName}, you have an outstanding balance of ${money(d.amount)} at ${HOTEL_NAME}. Kindly settle it at reception. Thank you.`,
   service_update: (d) =>
