@@ -3,6 +3,18 @@ import 'react-datepicker/dist/react-datepicker.css';
 import { useTheme } from '../context/ThemeContext';
 import { useRoomReservation } from '../context/RoomReservationContext';
 import { StepModal, Step, Field, RoomCards, DateInput, ReviewList } from './ui/StepModal';
+import DuplicateGuestHint from './DuplicateGuestHint';
+import { HOTEL_POLICIES, ID_TYPES, saveCheckInRecord, validateCheckIn } from '../services/operationsService';
+
+const blankVerification = {
+    email: '',
+    idType: ID_TYPES[0],
+    idNumber: '',
+    depositAmount: '',
+    paymentConfirmed: false,
+    overrideReason: '',
+    policyAcknowledged: false
+};
 
 const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
     const { theme } = useTheme();
@@ -28,6 +40,8 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
     const [guestInfo, setGuestInfo] = useState(initialFormState);
     const [errors, setErrors] = useState({});
     const [step, setStep] = useState(0);
+    const [verify, setVerify] = useState(blankVerification);
+    const [verifyProblems, setVerifyProblems] = useState([]);
 
     // Reset form when modal opens - use useCallback to memoize this function
     useEffect(() => {
@@ -38,6 +52,8 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
             });
             setErrors({});
             setStep(0);
+            setVerify(blankVerification);
+            setVerifyProblems([]);
         }
     }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -68,6 +84,7 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
     const validate = useCallback(() => {
         const newErrors = {};
         if (!guestInfo.fullName || !guestInfo.fullName.trim()) newErrors.fullName = 'Full Name is required';
+        if (!String(guestInfo.phone || '').trim() && !String(verify.email || '').trim()) newErrors.phone = 'Enter a phone number or email address';
         if (!guestInfo.room) newErrors.room = 'Room is required';
         if (!guestInfo.checkIn) newErrors.checkIn = 'Check In is required';
         if (!guestInfo.checkOut) {
@@ -76,12 +93,23 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
             newErrors.checkOut = 'Check Out must be after Check In';
         }
         return newErrors;
-    }, [guestInfo]);
+    }, [guestInfo, verify.email]);
+
+    // #7: identity, payment, room readiness and policy acknowledgement
+    const verificationProblems = useCallback(() => validateCheckIn({
+        reservation: { guest_phone: guestInfo.phone, guest_email: verify.email },
+        room: rooms.find(r => String(r.id) === String(guestInfo.room)),
+        form: { ...verify, phone: guestInfo.phone }
+    }), [guestInfo.phone, guestInfo.room, verify, rooms]);
 
     const handleCompleteCheckIn = useCallback(async () => {
         const validationErrors = validate();
+        const problems = verificationProblems();
         if (Object.keys(validationErrors).length > 0) {
             setErrors(validationErrors);
+        } else if (problems.length > 0) {
+            setVerifyProblems(problems);
+            setStep(2);
         } else {
             try {
                 const trimmedName = guestInfo.fullName.trim();
@@ -97,6 +125,7 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
                     firstName,
                     lastName,
                     phone: guestInfo.phone,
+                    email: verify.email,
                     gender: guestInfo.gender,
                     room: guestInfo.room,
                     checkIn: guestInfo.checkIn,
@@ -109,12 +138,17 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
                 
                 console.log('Submitting guest data:', newGuest);
                 await onAddGuest(newGuest);
+                const { error: recordError } = await saveCheckInRecord({
+                    reservation: { id: null, room_id: guestInfo.room, guest_name: trimmedName, guest_phone: guestInfo.phone, guest_email: verify.email },
+                    form: { ...verify, phone: guestInfo.phone }
+                });
+                if (recordError) console.warn('Could not save check-in record:', recordError.message);
                 onClose(); // Close the modal after adding the guest
             } catch (error) {
                 console.error('Error adding guest:', error);
             }
         }
-    }, [guestInfo, validate, onAddGuest, onClose]);
+    }, [guestInfo, verify, validate, verificationProblems, onAddGuest, onClose]);
 
     const money = (n) => `₵${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
     const priceOf = (room) => {
@@ -133,8 +167,14 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
     const fmt = (d) => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
     const goNext = () => {
+        if (step === 2) {
+            const problems = verificationProblems();
+            setVerifyProblems(problems);
+            if (problems.length === 0) setStep(3);
+            return;
+        }
         const all = validate();
-        const keys = step === 0 ? ['fullName'] : ['room', 'checkIn', 'checkOut'];
+        const keys = step === 0 ? ['fullName', 'phone'] : ['room', 'checkIn', 'checkOut'];
         const stepErrors = {};
         keys.forEach(k => { if (all[k]) stepErrors[k] = all[k]; });
         setErrors(stepErrors);
@@ -149,8 +189,11 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
                         <Field label="Full name" error={errors.fullName} span>
                             <input className="sm-input" type="text" name="fullName" value={guestInfo.fullName} onChange={handleChange} placeholder="Enter full name" autoComplete="off" autoFocus />
                         </Field>
-                        <Field label="Phone (optional)">
+                        <Field label="Phone" error={errors.phone}>
                             <input className="sm-input" type="tel" name="phone" value={guestInfo.phone} onChange={handleChange} placeholder="Enter phone number" autoComplete="off" />
+                        </Field>
+                        <Field label="Email (optional)">
+                            <input className="sm-input" type="email" value={verify.email} onChange={(e) => setVerify(v => ({ ...v, email: e.target.value }))} placeholder="name@example.com" autoComplete="off" />
                         </Field>
                         <Field label="Gender">
                             <select className="sm-select" name="gender" value={guestInfo.gender} onChange={handleChange}>
@@ -160,6 +203,9 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
                                 <option value="Other">Other</option>
                             </select>
                         </Field>
+                        <div className="sm-span">
+                            <DuplicateGuestHint name={guestInfo.fullName} phone={guestInfo.phone} email={verify.email} />
+                        </div>
                     </div>
                 </Step>
             );
@@ -187,11 +233,54 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
                 </Step>
             );
         }
+        if (step === 2) {
+            const noPayment = !verify.paymentConfirmed && !(Number(verify.depositAmount) > 0);
+            const room = rooms.find(r => String(r.id) === String(guestInfo.room));
+            return (
+                <Step title="Verification" lead="Confirm identity, payment and policies before handing over the key.">
+                    {verifyProblems.length > 0 && (
+                        <ul className="sm-alert" role="alert" style={{ marginTop: 0, marginBottom: 20, paddingLeft: 32 }}>
+                            {verifyProblems.map(p => <li key={p}>{p}</li>)}
+                        </ul>
+                    )}
+                    <div className="sm-grid">
+                        <Field label="ID type">
+                            <select className="sm-select" value={verify.idType} onChange={(e) => setVerify(v => ({ ...v, idType: e.target.value }))}>
+                                {ID_TYPES.map(t => <option key={t}>{t}</option>)}
+                            </select>
+                        </Field>
+                        <Field label="ID number">
+                            <input className="sm-input" value={verify.idNumber} onChange={(e) => setVerify(v => ({ ...v, idNumber: e.target.value }))} placeholder="e.g. GHA-123456789-0" autoComplete="off" />
+                        </Field>
+                        <Field label="Deposit received (₵)">
+                            <input className="sm-input" type="number" min="0" step="0.01" value={verify.depositAmount} onChange={(e) => setVerify(v => ({ ...v, depositAmount: e.target.value }))} placeholder="0.00" />
+                        </Field>
+                        <Field label="Payment">
+                            <label className="sm-check"><input type="checkbox" checked={verify.paymentConfirmed} onChange={(e) => setVerify(v => ({ ...v, paymentConfirmed: e.target.checked }))} /> Paid in full / payment confirmed</label>
+                        </Field>
+                        {noPayment && (
+                            <Field label="Reason for checking in without payment" span>
+                                <input className="sm-input" value={verify.overrideReason} onChange={(e) => setVerify(v => ({ ...v, overrideReason: e.target.value }))} placeholder="e.g. corporate account, pays at check-out" />
+                            </Field>
+                        )}
+                        <Field label="Room readiness" span>
+                            <p className="sm-hint" style={{ marginTop: 0 }}>{room ? `Room ${room.room_number} is ${room.housekeeping_status || 'Clean'}${room.status === 'Maintenance' ? ' and under maintenance' : ''}.` : 'Select a room first.'}</p>
+                        </Field>
+                        <div className="sm-span sm-review" style={{ padding: '16px 20px' }}>
+                            <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>{HOTEL_POLICIES.map(p => <li key={p}>{p}</li>)}</ul>
+                            <label className="sm-check" style={{ marginTop: 12 }}><input type="checkbox" checked={verify.policyAcknowledged} onChange={(e) => setVerify(v => ({ ...v, policyAcknowledged: e.target.checked }))} /> Guest acknowledges the hotel policies</label>
+                        </div>
+                    </div>
+                </Step>
+            );
+        }
         return (
             <Step title="Review & check in" lead="Confirm the details before checking the guest in.">
                 <ReviewList rows={[
                     ['Guest', guestInfo.fullName],
                     ['Phone', guestInfo.phone || '—'],
+                    ['ID', `${verify.idType} ${verify.idNumber}`],
+                    ['Payment', verify.paymentConfirmed ? 'Confirmed' : Number(verify.depositAmount) > 0 ? `Deposit ₵${Number(verify.depositAmount).toFixed(2)}` : `None — ${verify.overrideReason}`],
                     ['Gender', guestInfo.gender || 'Not specified'],
                     ['Room', selectedRoom ? `Room ${selectedRoom.room_number}` : '—'],
                     ['Dates', `${fmt(guestInfo.checkIn)} – ${fmt(guestInfo.checkOut)} (${nights} night${nights !== 1 ? 's' : ''})`]
@@ -200,7 +289,7 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
         );
     };
 
-    const lastStep = step === 2;
+    const lastStep = step === 3;
 
     return (
         <StepModal
@@ -208,7 +297,7 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
             onClose={onClose}
             isDarkMode={isDarkMode}
             title="Guest check-in"
-            steps={['Guest', 'Room & dates', 'Review']}
+            steps={['Guest', 'Room & dates', 'Verification', 'Review']}
             current={step}
             recap={[
                 guestInfo.fullName.trim() && { label: 'Guest', value: guestInfo.fullName.trim() },

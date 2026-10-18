@@ -380,3 +380,71 @@ export const saveCheckoutSettlement = async (settlement) => {
     .select()
     .single();
 };
+
+// ---------------------------------------------------------------------------
+// Hotel policies shown at every check-in (#7). Edit the wording here.
+// ---------------------------------------------------------------------------
+export const HOTEL_POLICIES = [
+  'Check-out time is 12:00 noon; late check-out may be charged.',
+  'The guest is responsible for damage to hotel property.',
+  'Smoking is not permitted in rooms.',
+  'The hotel is not liable for valuables left unattended.'
+];
+
+// ---------------------------------------------------------------------------
+// Charges posted to a room during the stay (#8)
+// ---------------------------------------------------------------------------
+const refersToRoom = (ref, room) => {
+  const value = String(ref ?? '').trim().toLowerCase().replace(/^room\s*/, '');
+  return value !== '' && [String(room.id), String(room.room_number)].includes(value);
+};
+
+/**
+ * Pure: turn unpaid room-service orders and completed service requests into folio lines.
+ * Only charges created on/after check-in are included.
+ */
+export const buildRoomCharges = ({ room, checkIn, orders = [], requests = [], services = [] }) => {
+  if (!room) return [];
+  const since = new Date(checkIn || 0).getTime() || 0;
+  const after = (row) => new Date(row.created_at || row.requested_at || 0).getTime() >= since;
+  const priceOf = Object.fromEntries(services.map((s) => [String(s.id), Number(s.price) || 0]));
+
+  const orderLines = orders
+    .filter((o) => o.order_type === 'room-service' && o.payment_status !== 'paid' && o.status !== 'cancelled'
+      && String(o.room_number) === String(room.room_number) && after(o) && Number(o.total_amount) > 0)
+    .map((o) => ({ key: `order:${o.id}`, source: 'restaurant', sourceId: o.id, description: `Room service (${new Date(o.created_at).toLocaleDateString()})`, amount: Number(o.total_amount) }));
+
+  const serviceLines = requests
+    .filter((r) => r.status === 'Completed' && refersToRoom(r.room, room) && after(r) && priceOf[String(r.service_id)] > 0)
+    .map((r) => ({ key: `service:${r.id}`, source: 'service', sourceId: r.id, description: r.service_name, amount: priceOf[String(r.service_id)] }));
+
+  return [...orderLines, ...serviceLines];
+};
+
+/** Loads charges for a room; missing tables simply contribute nothing. */
+export const loadRoomCharges = async (room, checkIn) => {
+  if (!room) return [];
+  const since = new Date(checkIn || 0).toISOString();
+  const [orders, requests, services] = await Promise.all([
+    supabase.from('restaurant_orders').select('*').eq('room_number', room.room_number).gte('created_at', since),
+    supabase.from('service_requests').select('*').eq('status', 'Completed').gte('created_at', since),
+    supabase.from('services').select('id, price')
+  ]);
+  return buildRoomCharges({
+    room,
+    checkIn,
+    orders: orders.data || [],
+    requests: requests.data || [],
+    services: services.data || []
+  });
+};
+
+/** After a zero-balance settlement, mark the included room-service orders as paid. */
+export const markRoomChargesSettled = async (lines) => {
+  const orderIds = lines.filter((l) => l.source === 'restaurant').map((l) => l.sourceId);
+  if (!orderIds.length) return { error: null };
+  return supabase
+    .from('restaurant_orders')
+    .update({ payment_status: 'paid', payment_method: 'Room folio', updated_at: new Date().toISOString() })
+    .in('id', orderIds);
+};

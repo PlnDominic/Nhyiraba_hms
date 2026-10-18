@@ -147,3 +147,8 @@
 .sm-room.is-selected { border-color: var(--rc-dot); box-shadow: 0 0 0 2px var(--rc-dot); }
 @media (max-width: 860px) { .sm-search { max-width: none; } .sm-rooms { max-height: 200px; } }
 .sm-room.is-selected, .sm-sheet--dark .sm-room.is-selected { background: var(--rc-bg); border-color: var(--rc-dot); box-shadow: 0 0 0 2px var(--rc-dot); }
+
+/* Checkbox rows (check-in verification) */
+.sm-check { display: flex; align-items: center; gap: 10px; min-height: 48px; font-size: 15px; color: var(--sm-text); cursor: pointer; }
+.sm-check input { width: 18px; height: 18px; accent-color: var(--sm-accent); flex: none; }
+.sm-alert li + li { margin-top: 4px; }

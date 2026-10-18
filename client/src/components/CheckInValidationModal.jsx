@@ -1,14 +1,8 @@
 import React, { useState } from 'react';
 import { useTheme } from '../context/ThemeContext';
-import { ID_TYPES, validateCheckIn } from '../services/operationsService';
+import { HOTEL_POLICIES as POLICIES, ID_TYPES, validateCheckIn } from '../services/operationsService';
 import DuplicateGuestHint from './DuplicateGuestHint';
 
-const POLICIES = [
-  'Check-out time is 12:00 noon; late check-out may be charged.',
-  'The guest is responsible for damage to hotel property.',
-  'Smoking is not permitted in rooms.',
-  'The hotel is not liable for valuables left unattended.'
-];
 
 const CheckInValidationModal = ({ reservation, room, onCancel, onConfirm }) => {
   const { theme } = useTheme();

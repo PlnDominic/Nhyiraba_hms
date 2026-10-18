@@ -12,6 +12,7 @@ import { deleteReservation } from '../services/reservationService';
 import { sendSmsNotification, reservationSmsData } from '../services/smsService';
 import { saveCheckInRecord } from '../services/operationsService';
 import CheckInValidationModal from './CheckInValidationModal';
+import CheckoutSettlementModal from './CheckoutSettlementModal';
 
 const ReservationsList = () => {
   const { theme } = useTheme();
@@ -42,6 +43,7 @@ const ReservationsList = () => {
   const [selectedCancellation, setSelectedCancellation] = useState(null);
   const [selectedReservation, setSelectedReservation] = useState(null);
   const [checkInTarget, setCheckInTarget] = useState(null);
+  const [checkOutTarget, setCheckOutTarget] = useState(null);
 
   // Add animation state for list items
   const [animatedItems, setAnimatedItems] = useState({});
@@ -300,8 +302,11 @@ const ReservationsList = () => {
     }
   };
 
-  const handleCheckOut = async (reservation) => {
-    if (window.confirm(`Check out ${reservation.guest_name}?`)) {
+  // Check-out opens the settlement folio; performCheckOut runs once it is settled
+  const handleCheckOut = (reservation) => setCheckOutTarget(reservation);
+
+  const performCheckOut = async (reservation) => {
+    if (reservation) {
       try {
         // Call the checkOutGuest function from context
         const result = await checkOutGuest(reservation.room_id);
@@ -1489,6 +1494,18 @@ const ReservationsList = () => {
         onUpdate={handleUpdateReservation}
         rooms={rooms}
       />
+
+      {checkOutTarget && (
+        <CheckoutSettlementModal
+          roomId={checkOutTarget.room_id}
+          onCancel={() => setCheckOutTarget(null)}
+          onSettled={async () => {
+            const target = checkOutTarget;
+            setCheckOutTarget(null);
+            await performCheckOut(target);
+          }}
+        />
+      )}
 
       {checkInTarget && (
         <CheckInValidationModal

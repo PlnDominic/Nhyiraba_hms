@@ -15,6 +15,7 @@ import supabase from '../supabaseClient';
 import { format, isToday, parseISO } from 'date-fns';
 import { StepModal, Step, Field, DateInput, ReviewList } from './ui/StepModal';
 import '../styles/Dashboard.css';
+import CheckoutSettlementModal from './CheckoutSettlementModal';
 
 const toNumber = (value) => {
   if (typeof value === 'number') {
@@ -226,7 +227,7 @@ const RoomCheckInModal = ({ isOpen, onClose, onCheckIn, roomId }) => {
 const Dashboard = () => {
   const { theme } = useTheme();
   const isDarkMode = theme === 'dark';
-  const { rooms: contextRooms, loading: roomsLoading, error: roomsError, getRooms, revenue, updateRoomStatus, refreshData } = useRoomReservation();
+  const { rooms: contextRooms, loading: roomsLoading, error: roomsError, getRooms, revenue, updateRoomStatus, refreshData, checkOutGuest } = useRoomReservation();
   const { guestList, addGuestToList } = useGuests();
   const navigate = useNavigate();
   const dashboardRef = useRef(null);
@@ -255,6 +256,7 @@ const Dashboard = () => {
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
+  const [settlementRoomId, setSettlementRoomId] = useState(null);
   const [hoveredRoom, setHoveredRoom] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [showTooltip, setShowTooltip] = useState(false);
@@ -1908,9 +1910,8 @@ const Dashboard = () => {
         openCheckInModal(roomId);
         break;
       case 'checkOut':
-        if (window.confirm(`Check out from Room ${selectedRoom.number}?`)) {
-          updateRoomStatus(roomId, 'Available');
-        }
+        // Settle the folio first; the check-out completes in onSettled
+        setSettlementRoomId(roomId);
         break;
       case 'maintenance':
         updateRoomStatus(roomId, 'Maintenance');
@@ -2282,6 +2283,20 @@ const Dashboard = () => {
             />
           )
         }
+
+        {/* Check-out settlement */}
+        {settlementRoomId !== null && (
+          <CheckoutSettlementModal
+            roomId={settlementRoomId}
+            onCancel={() => setSettlementRoomId(null)}
+            onSettled={async () => {
+              const roomId = settlementRoomId;
+              setSettlementRoomId(null);
+              await checkOutGuest(roomId);
+              await handleCheckOut(roomId);
+            }}
+          />
+        )}
 
         {/* Check-in Modal */}
         {
