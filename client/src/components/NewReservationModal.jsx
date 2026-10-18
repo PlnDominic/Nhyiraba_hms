@@ -101,7 +101,7 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
 
     // Find selected room to get its current price
     // Use loose equality to match string/number IDs
-    const selectedRoom = rooms.find(r => r.id == formData.roomNumber);
+    const selectedRoom = rooms.find(r => String(r.id) === String(formData.roomNumber));
 
     // Create reservation object
     const reservationData = {
@@ -155,14 +155,9 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
     onRequestClose();
   };
 
-  // Helper to get available rooms
-  const availableRooms = rooms
-    .filter(room => room.status === 'Available')
-    .sort((a, b) => a.room_number - b.room_number);
-
   const setCount = (name) => (value) => setFormData(prev => ({ ...prev, [name]: value }));
   const nights = Math.max(1, Math.ceil((formData.checkOutDate - formData.checkInDate) / 86400000) || 1);
-  const selectedRoom = rooms.find(room => room.id == formData.roomNumber);
+  const selectedRoom = rooms.find(room => String(room.id) === String(formData.roomNumber));
   const total = (selectedRoom?.price || 0) * nights;
   const fmt = (d) => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
   const money = (n) => `₵${Number(n).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -195,7 +190,7 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
         <Step title="Room & dates" lead="Choose an available room and the length of stay.">
           {errors.roomNumber && <p className="sm-error" style={{ marginBottom: 12 }}>{errors.roomNumber}</p>}
           <RoomCards
-            rooms={availableRooms}
+            rooms={rooms}
             selectedId={formData.roomNumber}
             onSelect={(id) => handleChange({ target: { name: 'roomNumber', value: id } })}
             label={(room) => `Room ${room.room_number}`}

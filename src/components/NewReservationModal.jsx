@@ -149,7 +149,6 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
   };
 
   const setCount = (name) => (value) => setFormData(prev => ({ ...prev, [name]: value }));
-  const availableRooms = rooms.filter(room => room.status === 'Available').sort((a, b) => a.id - b.id);
   const selectedRoom = rooms.find(room => String(room.id) === String(formData.roomNumber));
   const nights = Math.max(1, Math.ceil((formData.checkOutDate - formData.checkInDate) / 86400000) || 1);
   const fmt = (d) => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
@@ -197,7 +196,7 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
         <Step title="Room & dates" lead="Choose an available room and the length of stay.">
           {errors.roomNumber && <p className="sm-error" style={{ marginBottom: 12 }}>{errors.roomNumber}</p>}
           <RoomCards
-            rooms={availableRooms}
+            rooms={rooms}
             selectedId={formData.roomNumber}
             onSelect={(id) => handleChange({ target: { name: 'roomNumber', value: String(id) } })}
             label={(room) => `Room ${room.room_number || room.id}`}

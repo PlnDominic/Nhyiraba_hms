@@ -105,7 +105,7 @@ const OfflineCheckInModal = ({ isOpen, onClose, onCheckIn, onAddGuest, roomId })
           {guestMode && errors.room && <p className="sm-error" style={{ marginBottom: 12 }}>{errors.room}</p>}
           {guestMode && (
             <RoomCards
-              rooms={availableRooms}
+              rooms={rooms || []}
               selectedId={selectedRoom}
               onSelect={(id) => { setSelectedRoom(String(id)); setErrors({}); }}
               label={(r) => `Room ${r.room_number}`}

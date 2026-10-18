@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import '../../styles/StepModal.css';
@@ -92,22 +92,93 @@ export const Counter = ({ name, value, min, max, onChange }) => (
   </div>
 );
 
-export const RoomCards = ({ rooms, selectedId, onSelect, price, label, meta }) => (
-  rooms.length === 0
-    ? <div className="sm-empty">No rooms are available right now.</div>
-    : (
-      <div className="sm-rooms" role="radiogroup" aria-label="Available rooms">
-        {rooms.map((room) => (
-          <button key={room.id} type="button" role="radio" aria-checked={String(selectedId) === String(room.id)}
-            className={`sm-room ${String(selectedId) === String(room.id) ? 'is-selected' : ''}`} onClick={() => onSelect(room.id)}>
-            <div className="sm-room-name">{label(room)}</div>
-            <div className="sm-room-meta">{meta(room)}</div>
-            {price(room) > 0 && <div className="sm-room-price">₵{price(room)}<small> /night</small></div>}
+const STATUS_ORDER = ['Available', 'Reserved', 'Occupied', 'Maintenance'];
+
+const statusKey = (status) => {
+  const s = String(status || '').toLowerCase();
+  return STATUS_ORDER.find(k => k.toLowerCase() === s) || 'Other';
+};
+
+// Room picker: every room is colour-coded by availability, searchable, and the
+// status legend doubles as a filter. Only available rooms can be selected.
+export const RoomCards = ({ rooms, selectedId, onSelect, price, label, meta }) => {
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState('all');
+
+  const counts = useMemo(() => {
+    const c = { all: rooms.length };
+    rooms.forEach(r => { const k = statusKey(r.status); c[k] = (c[k] || 0) + 1; });
+    return c;
+  }, [rooms]);
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rooms
+      .filter(r => filter === 'all' || statusKey(r.status) === filter)
+      .filter(r => !q || [label(r), meta(r), r.status, r.room_number, r.id].some(v => String(v ?? '').toLowerCase().includes(q)))
+      .sort((a, b) => {
+        const av = statusKey(a.status) === 'Available' ? 0 : 1;
+        const bv = statusKey(b.status) === 'Available' ? 0 : 1;
+        return av - bv || String(label(a)).localeCompare(String(label(b)), undefined, { numeric: true });
+      });
+  }, [rooms, query, filter, label, meta]);
+
+  return (
+    <div className="sm-picker">
+      <div className="sm-picker-bar">
+        <input
+          className="sm-input sm-search"
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+          placeholder="Search room number, type or status…"
+          aria-label="Search rooms"
+        />
+        <div className="sm-legend" role="group" aria-label="Filter by availability">
+          <button type="button" className={`sm-chip ${filter === 'all' ? 'is-active' : ''}`} onClick={() => setFilter('all')}>
+            All <span>{counts.all}</span>
           </button>
-        ))}
+          {STATUS_ORDER.filter(k => counts[k]).map(k => (
+            <button key={k} type="button" className={`sm-chip sm-chip--${k.toLowerCase()} ${filter === k ? 'is-active' : ''}`} onClick={() => setFilter(filter === k ? 'all' : k)}>
+              <i className="sm-dot" />{k} <span>{counts[k]}</span>
+            </button>
+          ))}
+        </div>
       </div>
-    )
-);
+
+      {visible.length === 0 ? (
+        <div className="sm-empty">{rooms.length === 0 ? 'No rooms found.' : 'No rooms match your search.'}</div>
+      ) : (
+        <div className="sm-rooms" role="radiogroup" aria-label="Rooms">
+          {visible.map((room) => {
+            const key = statusKey(room.status);
+            const isFree = key === 'Available';
+            const selected = String(selectedId) === String(room.id);
+            const p = price(room);
+            return (
+              <button
+                key={room.id}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                aria-disabled={!isFree}
+                disabled={!isFree}
+                title={isFree ? `${label(room)} · Available` : `${label(room)} · ${room.status}`}
+                className={`sm-room sm-room--${key.toLowerCase()} ${selected ? 'is-selected' : ''}`}
+                onClick={() => isFree && onSelect(room.id)}
+              >
+                <span className="sm-room-top"><b>{label(room)}</b><i className="sm-dot" /></span>
+                <span className="sm-room-meta">{meta(room)}</span>
+                <span className="sm-room-foot">{isFree ? (p > 0 ? `₵${p}` : 'Available') : room.status}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const DateInput = ({ selected, onChange, minDate, error }) => (
   <DatePicker

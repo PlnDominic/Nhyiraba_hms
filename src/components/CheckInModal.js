@@ -164,7 +164,7 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
                 <Step title="Room & dates" lead="Pick an available room for this stay.">
                     {errors.room && <p className="sm-error" style={{ marginBottom: 12 }}>{errors.room}</p>}
                     <RoomCards
-                        rooms={availableRooms}
+                        rooms={rooms}
                         selectedId={guestInfo.room}
                         onSelect={(id) => handleChange({ target: { name: 'room', value: id } })}
                         label={(room) => `Room ${room.room_number}`}
