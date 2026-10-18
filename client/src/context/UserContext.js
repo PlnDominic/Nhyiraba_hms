@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { clearOfflineData } from '../offline';
 
 // Create a simple user context without authentication
 const UserContext = createContext();
@@ -52,6 +53,7 @@ export const UserProvider = ({ children }) => {
         } else {
             setPermissions([]);
             localStorage.removeItem('currentUser');
+            clearOfflineData(); // cached copies of hotel data must not outlive the session
         }
     };
 

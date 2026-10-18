@@ -828,6 +828,13 @@ export const RoomReservationProvider = ({ children }) => {
 
   const { loading: userLoading } = useUser();
 
+  // Offline changes have just been uploaded (or rejected): reload so the screen shows the server's truth
+  useEffect(() => {
+    const onSynced = () => refreshData(true);
+    window.addEventListener('hms-data-synced', onSynced);
+    return () => window.removeEventListener('hms-data-synced', onSynced);
+  }, [refreshData]);
+
   // Load initial data and set up real-time subscriptions
   useEffect(() => {
     // Wait for user to be loaded

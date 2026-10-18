@@ -34,6 +34,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useUser } from '../context/UserContext';
+import { getOfflineState } from '../offline';
 import { useRoomReservation } from '../context/RoomReservationContext';
 import usePermission from '../hooks/usePermission';
 import '../styles/Sidebar.css';
@@ -104,6 +105,10 @@ const Sidebar = ({ activeLink, isOpen, toggleSidebar }) => {
   };
 
   const handleLogout = () => {
+    const waiting = getOfflineState().queued;
+    if (waiting > 0 && !window.confirm(`${waiting} change${waiting === 1 ? ' has' : 's have'} not been uploaded yet. They stay saved on this device and upload the next time you sign in with this account while online. Log out anyway?`)) {
+      return;
+    }
     logoutUser();
     navigate('/');
   };

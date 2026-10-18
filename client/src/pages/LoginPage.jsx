@@ -106,8 +106,11 @@ const LoginPage = () => {
         console.log('3. User does not exist in Supabase Auth');
       }
 
-      setError(err.message || 'Invalid email or password');
-      toast.error('Login failed');
+      const offline = (typeof navigator !== 'undefined' && navigator.onLine === false) || /failed to fetch|network/i.test(err.message || '');
+      setError(offline
+        ? "You're offline. Signing in needs a connection. Once you have signed in on this device, the app keeps working without one."
+        : err.message || 'Invalid email or password');
+      toast.error(offline ? "You're offline" : 'Login failed');
     } finally {
       setIsLoading(false);
     }

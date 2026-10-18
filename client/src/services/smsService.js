@@ -1,7 +1,7 @@
 import supabase from '../supabaseClient';
+import { enqueueSms } from '../offline';
+import { API_BASE_URL } from '../offline/config';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL ||
-  (process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:5000/api');
 
 /**
  * Ask the server to send a templated SMS. Fire-and-forget: failures are logged
@@ -11,6 +11,11 @@ const API_BASE_URL = process.env.REACT_APP_API_URL ||
  */
 export const sendSmsNotification = async (event, phone, data = {}) => {
   if (!phone) return { success: false, skipped: true };
+  // No connection: keep the message and send it when we are back online (dropped if older than 12h)
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    await enqueueSms(event, phone, data);
+    return { success: true, queued: true };
+  }
   try {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData?.session?.access_token;
@@ -28,6 +33,10 @@ export const sendSmsNotification = async (event, phone, data = {}) => {
     if (!response.ok) console.warn('SMS not sent:', result.error);
     return result;
   } catch (error) {
+    if (error.name === 'TypeError') { // network failure
+      await enqueueSms(event, phone, data);
+      return { success: true, queued: true };
+    }
     console.warn('SMS notification failed:', error.message);
     return { success: false, error: error.message };
   }
@@ -60,7 +69,7 @@ export const sendStaffSms = (event, phone, data = {}, { retryOf } = {}) => {
       });
       return await response.json().catch(() => ({ success: false, error: `HTTP ${response.status}` }));
     } catch (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: error.name === 'TypeError' ? "You're offline. Text messages can only be sent while connected." : error.message };
     }
   };
   return run();
