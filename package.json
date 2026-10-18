@@ -23,6 +23,8 @@
     "dev": "concurrently \"node server.js\" \"cd client && npm run react-start\"",
     "build": "node build.js",
     "vercel-build": "node build.js",
-    "setup:storage": "node scripts/create_avatars_bucket.js"
+    "setup:storage": "node scripts/create_avatars_bucket.js",
+    "test:server": "node --test server/__tests__/*.test.js",
+    "test:db": "bash scripts/test-db-authorization.sh"
   }
 }

@@ -9,6 +9,9 @@ const { sendApprovalEmail, testEmailConfig } = require('./server/emailService');
 // SMS service (Arkesel)
 const { handleSend, handleStatus } = require('./server/smsHandlers');
 
+// Server-side authorization (role is read from user_profiles, never from the client)
+const { requireAuth, isManager, ADMIN_ROLES } = require('./server/auth');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -47,7 +50,7 @@ app.get('/', (req, res) => {
 // ==================== ROOMS API ENDPOINTS ====================
 
 // GET all rooms with optional filters
-app.get('/api/rooms', async (req, res) => {
+app.get('/api/rooms', requireAuth(), async (req, res) => {
     try {
         const { status, type, min_price, max_price } = req.query;
 
@@ -79,7 +82,7 @@ app.get('/api/rooms', async (req, res) => {
 });
 
 // GET room by ID
-app.get('/api/rooms/:id', async (req, res) => {
+app.get('/api/rooms/:id', requireAuth(), async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -112,13 +115,20 @@ app.get('/api/rooms/:id', async (req, res) => {
 });
 
 // PUT update room
-app.put('/api/rooms/:id', async (req, res) => {
+app.put('/api/rooms/:id', requireAuth(), async (req, res) => {
     try {
         const { id } = req.params;
-        const updateData = req.body;
 
-        delete updateData.id;
-        delete updateData.created_at;
+        // Only whitelisted fields; pricing and room definition are manager-only
+        const STAFF_FIELDS = ['status', 'guest', 'housekeeping_status'];
+        const MANAGER_FIELDS = ['price', 'type', 'capacity', 'amenities', 'room_number'];
+        const allowed = isManager(req.auth) ? [...STAFF_FIELDS, ...MANAGER_FIELDS] : STAFF_FIELDS;
+        const rejected = Object.keys(req.body || {}).filter(k => !allowed.includes(k) && !['id', 'created_at', 'updated_at'].includes(k));
+        if (rejected.length) {
+            return res.status(403).json({ success: false, error: `Not allowed to change: ${rejected.join(', ')}` });
+        }
+        const updateData = Object.fromEntries(Object.entries(req.body || {}).filter(([k]) => allowed.includes(k)));
+        updateData.updated_at = new Date().toISOString();
 
         const { data, error } = await supabase
             .from('rooms')
@@ -146,7 +156,7 @@ app.put('/api/rooms/:id', async (req, res) => {
 // ==================== RESERVATIONS API ENDPOINTS ====================
 
 // GET all reservations
-app.get('/api/reservations', async (req, res) => {
+app.get('/api/reservations', requireAuth(), async (req, res) => {
     try {
         const { status, room_id } = req.query;
 
@@ -178,7 +188,7 @@ app.get('/api/reservations', async (req, res) => {
 // ==================== EMAIL API ENDPOINTS ====================
 
 // POST endpoint to send approval email
-app.post('/api/send-approval-email', async (req, res) => {
+app.post('/api/send-approval-email', requireAuth(ADMIN_ROLES), async (req, res) => {
     try {
         const { email, fullName, password, hotelName } = req.body;
 
@@ -228,7 +238,7 @@ app.post('/api/send-approval-email', async (req, res) => {
 });
 
 // GET endpoint to test email configuration
-app.get('/api/test-email', async (req, res) => {
+app.get('/api/test-email', requireAuth(ADMIN_ROLES), async (req, res) => {
     try {
         const isConfigured = await testEmailConfig();
         res.json({

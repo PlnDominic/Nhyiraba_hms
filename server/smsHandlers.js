@@ -1,29 +1,29 @@
 // Shared request logic for /api/sms/* — used by both the Express server and
 // the Vercel serverless functions so they cannot drift apart.
-const { createClient } = require('@supabase/supabase-js');
+const { authenticate, isManager } = require('./auth');
 const { sendSms, getSmsStatus, buildMessage } = require('./smsService');
 
 const FINAL_STATUSES = ['DELIVERED', 'NOT_DELIVERED', 'REJECTD', 'PROHIBITED', 'EXPIRED', 'FAILED'];
 
-const getClient = (token) => {
-  const url = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_KEY;
-  if (serviceKey) return createClient(url, serviceKey);
-  // No service key: act as the logged-in user so RLS policies apply
-  return createClient(url, process.env.REACT_APP_SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-};
+// Automatic messages sent as a side effect of front-desk actions: any signed-in staff.
+const LIFECYCLE_EVENTS = [
+  'reservation_created', 'reservation_updated', 'reservation_cancelled',
+  'checked_in', 'checked_out', 'no_show', 'payment_received',
+];
+// Staff-composed messages (free text or reminders) and retries: managers only.
+const MANAGER_EVENTS = ['arrival_reminder', 'checkout_reminder', 'payment_reminder', 'service_update', 'custom'];
 
-const authenticate = async (authHeader) => {
-  const token = (authHeader || '').replace(/^Bearer\s+/i, '');
-  if (!token) return { error: { status: 401, body: { success: false, error: 'Authentication required' } } };
-  const supabase = getClient(token);
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data?.user) {
-    return { error: { status: 401, body: { success: false, error: 'Invalid session' } } };
-  }
-  return { supabase, user: data.user };
+// Per-user cap so a stolen session cannot drain SMS credit.
+const RATE_LIMIT = { windowMinutes: 10, maxMessages: 40 };
+
+const overRateLimit = async (supabase, userId) => {
+  const since = new Date(Date.now() - RATE_LIMIT.windowMinutes * 60000).toISOString();
+  const { count, error } = await supabase
+    .from('sms_logs')
+    .select('id', { count: 'exact', head: true })
+    .eq('sent_by', userId)
+    .gte('created_at', since);
+  return !error && count >= RATE_LIMIT.maxMessages;
 };
 
 const logSms = async (supabase, row) => {
@@ -37,6 +37,15 @@ const handleSend = async (authHeader, payload = {}) => {
   if (auth.error) return auth.error;
 
   const { event, phone, data, retryOf } = payload;
+  if (!LIFECYCLE_EVENTS.includes(event) && !MANAGER_EVENTS.includes(event)) {
+    return { status: 400, body: { success: false, error: 'Unknown message type' } };
+  }
+  if ((MANAGER_EVENTS.includes(event) || retryOf) && !isManager(auth)) {
+    return { status: 403, body: { success: false, error: 'Only managers can send custom messages or reminders' } };
+  }
+  if (await overRateLimit(auth.supabase, auth.user.id)) {
+    return { status: 429, body: { success: false, error: 'Too many messages sent recently. Please wait a few minutes.' } };
+  }
   const message = buildMessage(event, data);
   if (!phone || !message) {
     return { status: 400, body: { success: false, error: 'Missing or invalid fields: event, phone' } };
@@ -69,6 +78,9 @@ const handleSend = async (authHeader, payload = {}) => {
 const handleStatus = async (authHeader, query = {}) => {
   const auth = await authenticate(authHeader);
   if (auth.error) return auth.error;
+  if (!isManager(auth)) {
+    return { status: 403, body: { success: false, error: 'Only managers can view the message log' } };
+  }
 
   const limit = Math.min(parseInt(query.limit, 10) || 20, 100);
   const { data: rows, error } = await auth.supabase

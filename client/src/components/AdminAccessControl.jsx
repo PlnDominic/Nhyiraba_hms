@@ -205,10 +205,14 @@ const AdminAccessControl = () => {
   // Send approval email
   const sendApprovalEmail = async (email, fullName, password) => {
     try {
-      const response = await fetch('http://localhost:5000/api/send-approval-email', {
+      // The server only sends approval emails for an authenticated administrator
+      const { data: sessionData } = await supabase.auth.getSession();
+      const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${apiBase}/send-approval-email`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${sessionData?.session?.access_token || ''}`
         },
         body: JSON.stringify({
           email,
