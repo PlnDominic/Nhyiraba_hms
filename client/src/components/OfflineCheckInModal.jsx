@@ -72,13 +72,13 @@ const OfflineCheckInModal = ({ isOpen, onClose, onCheckIn, onAddGuest, roomId })
 
   return (
     <div className="apple-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={`apple-ui apple-sheet apple-sheet--${mode}`} style={{ maxWidth: 460 }} role="dialog" aria-modal="true" aria-label={guestMode ? 'Guest check-in' : `Check in room ${roomId}`}>
-        <div className="flex items-center justify-between px-5 pt-5 pb-3">
-          <button type="button" className="apple-btn apple-btn--plain" style={{ height: 30, minWidth: 60, textAlign: 'left', padding: 0 }} onClick={onClose}>Cancel</button>
-          <h2 className="text-[17px] font-semibold">{guestMode ? 'Guest Check-In' : `Check In · Room ${roomId}`}</h2>
-          <div style={{ minWidth: 60, textAlign: 'right' }}>
-            <button type="button" className="apple-close" onClick={onClose} aria-label="Close"><CloseIcon /></button>
+      <div className={`apple-ui apple-sheet apple-sheet--${mode}`} style={{ maxWidth: 1080 }} role="dialog" aria-modal="true" aria-label={guestMode ? 'Guest check-in' : `Check in room ${roomId}`}>
+        <div className="flex items-start justify-between px-5 pt-5 pb-3">
+          <div>
+            <h2 className="apple-title">{guestMode ? 'Guest Check-In' : `Check In · Room ${roomId}`}</h2>
+            <p className="apple-subtitle">{guestMode ? 'Register an arriving guest and assign a room.' : 'Register the guest arriving in this room.'}</p>
           </div>
+          <button type="button" className="apple-close" onClick={onClose} aria-label="Close"><CloseIcon /></button>
         </div>
 
         <form id="room-check-in-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 pt-2 pb-4 space-y-6" style={{ overflowX: 'hidden' }}>
@@ -118,8 +118,8 @@ const OfflineCheckInModal = ({ isOpen, onClose, onCheckIn, onAddGuest, roomId })
           </div>
         </form>
 
-        <div className="px-5 pb-5 pt-2">
-          <button type="submit" form="room-check-in-form" className="apple-btn apple-btn--primary w-full">Check In</button>
+<div className="px-5 pb-5 pt-2 apple-footer">
+          <button type="button" className="apple-btn apple-btn--secondary" onClick={onClose}>Cancel</button><button type="submit" form="room-check-in-form" className="apple-btn apple-btn--primary">Check In</button>
         </div>
       </div>
     </div>

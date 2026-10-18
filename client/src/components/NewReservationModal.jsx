@@ -278,8 +278,8 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
     return (
       <div className="apple-step space-y-6">
         <div className="text-center py-2">
-          <p className={`text-sm ${muted}`}>Total · {nights} night{nights !== 1 ? 's' : ''}</p>
-          <p className="text-[40px] leading-tight font-semibold tracking-tight">₵{totalPrice.toFixed(2)}</p>
+          <p className={`text-lg ${muted}`}>Total · {nights} night{nights !== 1 ? 's' : ''}</p>
+          <p className="text-[72px] leading-none font-semibold tracking-tight">₵{totalPrice.toFixed(2)}</p>
         </div>
 
         <div>
@@ -330,23 +330,17 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
       closeTimeoutMS={250}
       overlayClassName="apple-overlay"
       className={`apple-ui apple-sheet apple-sheet--${mode}`}
-      style={{ content: { maxWidth: 520 } }}
+      style={{ content: { maxWidth: 1240 } }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-5 pb-3">
-        <div style={{ minWidth: 60 }}>
-          {currentStep > 1 && (
-            <button type="button" className="apple-btn apple-btn--plain" style={{ height: 30, padding: 0 }} onClick={goToPreviousStep} disabled={isSubmitting}>
-              ‹ Back
-            </button>
-          )}
+      <div className="flex items-start justify-between px-5 pt-5 pb-3">
+        <div>
+          <h2 className="apple-title">New Reservation</h2>
+          <p className="apple-subtitle">Create a booking for an upcoming stay.</p>
         </div>
-        <h2 className="text-[17px] font-semibold">New Reservation</h2>
-        <div style={{ minWidth: 60, textAlign: 'right' }}>
-          <button type="button" className="apple-close" onClick={handleModalClose} aria-label="Close">
+        <button type="button" className="apple-close" onClick={handleModalClose} aria-label="Close">
             <CloseIcon />
           </button>
-        </div>
       </div>
 
       <div className="px-5 pb-3">{renderStepIndicator()}</div>
@@ -359,11 +353,16 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
       </div>
 
       {/* Footer */}
-      <div className="px-5 pb-5 pt-2">
-        {currentStep < 3 ? (
-          <button type="button" className="apple-btn apple-btn--primary w-full" onClick={goToNextStep}>Continue</button>
+      <div className="px-5 pb-5 pt-2 apple-footer">
+        {currentStep > 1 ? (
+          <button type="button" className="apple-btn apple-btn--secondary" onClick={goToPreviousStep} disabled={isSubmitting}>Back</button>
         ) : (
-          <button type="button" className="apple-btn apple-btn--success w-full" onClick={handleSubmit} disabled={isSubmitting}>
+          <button type="button" className="apple-btn apple-btn--secondary" onClick={handleModalClose}>Cancel</button>
+        )}
+        {currentStep < 3 ? (
+          <button type="button" className="apple-btn apple-btn--primary" onClick={goToNextStep}>Continue</button>
+        ) : (
+          <button type="button" className="apple-btn apple-btn--success" onClick={handleSubmit} disabled={isSubmitting}>
             {isSubmitting ? 'Processing…' : 'Confirm Reservation'}
           </button>
         )}
