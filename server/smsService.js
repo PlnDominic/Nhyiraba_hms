@@ -3,7 +3,7 @@
 
 const DEFAULT_API_URL = 'https://sms.arkesel.com/api/v2/sms/send';
 const HOTEL_NAME = process.env.HOTEL_NAME || 'Nhyiraba Hotel';
-const CHECKOUT_TIME = process.env.CHECKOUT_TIME || '12:00 noon';
+const CHECKOUT_TIME = process.env.CHECKOUT_TIME || '10:30 AM';
 
 // Normalise Ghana numbers to international format without '+' (e.g. 233241234567)
 const normalizePhone = (raw) => {

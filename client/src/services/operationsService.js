@@ -385,7 +385,7 @@ export const saveCheckoutSettlement = async (settlement) => {
 // Hotel policies shown at every check-in (#7). Edit the wording here.
 // ---------------------------------------------------------------------------
 export const HOTEL_POLICIES = [
-  'Check-out time is 12:00 noon; late check-out may be charged.',
+  'Check-out time is 10:30 AM; late check-out may be charged.',
   'The guest is responsible for damage to hotel property.',
   'Smoking is not permitted in rooms.',
   'The hotel is not liable for valuables left unattended.'

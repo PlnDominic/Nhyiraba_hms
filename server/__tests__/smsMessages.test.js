@@ -6,6 +6,6 @@ const data = { guestName: 'Ama', roomNumber: 4, checkInDate: '2026-11-02', check
 
 test('reservation and check-in messages state the check-out time', () => {
   for (const event of ['reservation_created', 'reservation_updated', 'checked_in']) {
-    assert.match(buildMessage(event, data), /12:00 noon/, event);
+    assert.match(buildMessage(event, data), /10:30 AM/, event);
   }
 });
