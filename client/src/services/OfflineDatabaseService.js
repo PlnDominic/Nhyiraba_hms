@@ -144,6 +144,33 @@ class OfflineDatabaseService {
     this.db.run(createGuestsTable);
     this.db.run(createReservationsTable);
     this.db.run(createUsersTable);
+
+    // Columns needed to tie a guest / reservation to a room and track its state
+    this._addColumnIfMissing('guests', 'room_id', 'INTEGER');
+    this._addColumnIfMissing('guests', 'status', "TEXT DEFAULT 'Checked In'");
+    this._addColumnIfMissing('guests', 'gender', 'TEXT');
+    this._addColumnIfMissing('guests', 'check_in', 'TEXT');
+    this._addColumnIfMissing('guests', 'check_out', 'TEXT');
+    this._addColumnIfMissing('reservations', 'guest_name', 'TEXT');
+  }
+
+  _addColumnIfMissing(table, column, definition) {
+    const info = this.db.exec(`PRAGMA table_info(${table})`);
+    const existing = info.length ? info[0].values.map(row => row[1]) : [];
+    if (!existing.includes(column)) {
+      this.db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    }
+  }
+
+  _rows(sql, params = []) {
+    const result = this.db.exec(sql, params);
+    if (result.length === 0) return [];
+    const { columns, values } = result[0];
+    return values.map(row => {
+      const obj = {};
+      columns.forEach((col, i) => { obj[col] = row[i]; });
+      return obj;
+    });
   }
 
   /**
@@ -289,7 +316,7 @@ class OfflineDatabaseService {
   }
 
   /**
-   * Create a new guest
+   * Create a new guest (optionally assigned to a room)
    */
   async createGuest(guestData) {
     if (!this.isReady()) {
@@ -297,32 +324,110 @@ class OfflineDatabaseService {
     }
 
     try {
-      const stmt = this.db.prepare(`
-        INSERT INTO guests (first_name, last_name, email, phone, address, created_at, updated_at, needs_sync)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-      `);
-      
+      const fullName = (guestData.name || guestData.fullName || '').trim();
+      const [first, ...rest] = fullName.split(' ').filter(Boolean);
+      const firstName = guestData.first_name || guestData.firstName || first || 'Guest';
+      const lastName = guestData.last_name || guestData.lastName || rest.join(' ') || '-';
+      const toIso = (d) => (d ? new Date(d).toISOString() : null);
       const now = new Date().toISOString();
-      stmt.run([
-        guestData.first_name,
-        guestData.last_name,
-        guestData.email,
-        guestData.phone,
-        guestData.address,
-        now,
-        now
-      ]);
-      stmt.free();
 
-      // Get the inserted guest
+      this.db.run(
+        `INSERT INTO guests (first_name, last_name, email, phone, address, gender, room_id, status, check_in, check_out, created_at, updated_at, needs_sync)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        [
+          firstName,
+          lastName,
+          guestData.email || null,
+          guestData.phone || null,
+          guestData.address || null,
+          guestData.gender || null,
+          guestData.room_id ?? guestData.room ?? null,
+          guestData.status || 'Checked In',
+          toIso(guestData.check_in || guestData.checkIn),
+          toIso(guestData.check_out || guestData.checkOut),
+          now,
+          now
+        ]
+      );
+
       const insertedId = this.db.exec("SELECT last_insert_rowid() as id")[0].values[0][0];
       console.log(`✅ Created new guest with ID: ${insertedId}`);
-      
+      await this.reconcileRoomStatuses();
       return insertedId;
     } catch (error) {
       console.error('Error creating guest:', error);
       throw error;
     }
+  }
+
+  /**
+   * Get all guests, shaped the way the guest screens expect
+   */
+  async getGuests() {
+    if (!this.isReady()) {
+      await this.initialize();
+    }
+
+    const rooms = this._rows('SELECT id, room_number FROM rooms');
+    const roomNumberById = new Map(rooms.map(r => [r.id, r.room_number]));
+
+    return this._rows('SELECT * FROM guests ORDER BY id DESC').map(g => ({
+      ...g,
+      name: `${g.first_name} ${g.last_name === '-' ? '' : g.last_name}`.trim(),
+      room: g.room_id,
+      room_name: g.room_id != null ? `Room ${roomNumberById.get(g.room_id) ?? g.room_id}` : null,
+      checkIn: g.check_in,
+      checkOut: g.check_out
+    }));
+  }
+
+  /**
+   * Update a guest and release / take rooms accordingly
+   */
+  async updateGuest(id, updates) {
+    if (!this.isReady()) {
+      await this.initialize();
+    }
+
+    const columns = {
+      first_name: updates.first_name ?? updates.firstName,
+      last_name: updates.last_name ?? updates.lastName,
+      email: updates.email,
+      phone: updates.phone,
+      address: updates.address,
+      gender: updates.gender,
+      room_id: updates.room_id ?? updates.room,
+      status: updates.status,
+      check_in: updates.check_in ?? updates.checkIn,
+      check_out: updates.check_out ?? updates.checkOut
+    };
+    ['check_in', 'check_out'].forEach(k => {
+      if (columns[k]) columns[k] = new Date(columns[k]).toISOString();
+    });
+
+    const entries = Object.entries(columns).filter(([, v]) => v !== undefined);
+    if (entries.length > 0) {
+      this.db.run(
+        `UPDATE guests SET ${entries.map(([k]) => `${k} = ?`).join(', ')}, updated_at = ?, needs_sync = 1 WHERE id = ?`,
+        [...entries.map(([, v]) => v), new Date().toISOString(), id]
+      );
+    }
+    await this.reconcileRoomStatuses();
+    return true;
+  }
+
+  /**
+   * Delete a guest (and any reservations that belong to them)
+   */
+  async deleteGuest(id) {
+    if (!this.isReady()) {
+      await this.initialize();
+    }
+
+    this.db.run('DELETE FROM reservations WHERE guest_id = ?', [id]);
+    this.db.run('DELETE FROM guests WHERE id = ?', [id]);
+    await this.reconcileRoomStatuses();
+    return true;
   }
 
   /**
@@ -334,33 +439,117 @@ class OfflineDatabaseService {
     }
 
     try {
-      const stmt = this.db.prepare(`
-        INSERT INTO reservations (guest_id, room_id, check_in_date, check_out_date, total_amount, status, created_at, updated_at, needs_sync)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
-      `);
-      
-      const now = new Date().toISOString();
-      stmt.run([
-        reservationData.guest_id,
-        reservationData.room_id,
-        reservationData.check_in_date,
-        reservationData.check_out_date,
-        reservationData.total_amount,
-        reservationData.status || 'Confirmed',
-        now,
-        now
-      ]);
-      stmt.free();
+      if (reservationData.guest_id === undefined || reservationData.guest_id === null) {
+        throw new Error('A reservation needs a guest (guest_id).');
+      }
 
-      // Get the inserted reservation
+      const now = new Date().toISOString();
+      this.db.run(
+        `INSERT INTO reservations (guest_id, guest_name, room_id, check_in_date, check_out_date, total_amount, status, created_at, updated_at, needs_sync)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        [
+          reservationData.guest_id,
+          reservationData.guest_name || null,
+          reservationData.room_id,
+          reservationData.check_in_date,
+          reservationData.check_out_date,
+          reservationData.total_amount ?? 0,
+          reservationData.status || 'Confirmed',
+          now,
+          now
+        ]
+      );
+
       const insertedId = this.db.exec("SELECT last_insert_rowid() as id")[0].values[0][0];
       console.log(`✅ Created new reservation with ID: ${insertedId}`);
-      
+      await this.reconcileRoomStatuses();
       return insertedId;
     } catch (error) {
       console.error('Error creating reservation:', error);
       throw error;
     }
+  }
+
+  async getReservations() {
+    if (!this.isReady()) {
+      await this.initialize();
+    }
+    return this._rows('SELECT * FROM reservations ORDER BY check_in_date DESC');
+  }
+
+  async updateReservation(id, updates) {
+    if (!this.isReady()) {
+      await this.initialize();
+    }
+
+    const allowed = ['guest_id', 'guest_name', 'room_id', 'check_in_date', 'check_out_date', 'total_amount', 'status'];
+    const entries = Object.entries(updates || {}).filter(([k, v]) => allowed.includes(k) && v !== undefined);
+    if (entries.length > 0) {
+      this.db.run(
+        `UPDATE reservations SET ${entries.map(([k]) => `${k} = ?`).join(', ')}, updated_at = ?, needs_sync = 1 WHERE id = ?`,
+        [...entries.map(([, v]) => v), new Date().toISOString(), id]
+      );
+    }
+    await this.reconcileRoomStatuses();
+    return true;
+  }
+
+  async deleteReservation(id) {
+    if (!this.isReady()) {
+      await this.initialize();
+    }
+    this.db.run('DELETE FROM reservations WHERE id = ?', [id]);
+    await this.reconcileRoomStatuses();
+    return true;
+  }
+
+  /**
+   * Make every room's Occupied / Reserved / Available status agree with the
+   * guests and reservations that exist. Maintenance is a manual state and is
+   * never changed. Returns the number of rooms that were corrected.
+   */
+  async reconcileRoomStatuses() {
+    if (!this.isReady()) {
+      await this.initialize();
+    }
+
+    const norm = (v) => String(v ?? '').toLowerCase().replace(/[_-]/g, ' ').trim();
+    const rooms = this._rows('SELECT id, status FROM rooms');
+    const guests = this._rows('SELECT room_id, status FROM guests WHERE room_id IS NOT NULL');
+    const reservations = this._rows('SELECT room_id, status FROM reservations');
+
+    const occupied = new Set();
+    const reserved = new Set();
+    guests.forEach(g => {
+      const st = norm(g.status);
+      if (st === 'checked in') occupied.add(Number(g.room_id));
+      else if (st === 'reserved') reserved.add(Number(g.room_id));
+    });
+    reservations.forEach(r => {
+      const st = norm(r.status);
+      if (st === 'checked in') occupied.add(Number(r.room_id));
+      else if (st === 'reserved' || st === 'confirmed') reserved.add(Number(r.room_id));
+    });
+
+    const now = new Date().toISOString();
+    let changed = 0;
+    rooms.forEach(room => {
+      if (norm(room.status) === 'maintenance') return;
+      const expected = occupied.has(room.id) ? 'Occupied' : reserved.has(room.id) ? 'Reserved' : 'Available';
+      if (room.status !== expected) {
+        this.db.run('UPDATE rooms SET status = ?, updated_at = ?, needs_sync = 1 WHERE id = ?', [expected, now, room.id]);
+        changed += 1;
+      }
+    });
+    if (changed) console.log(`🔧 Reconciled ${changed} room status(es)`);
+    return changed;
+  }
+
+  /**
+   * Revenue summary (the offline database does not track payments yet)
+   */
+  async getRevenue() {
+    return { total: 0, dates: [], values: [] };
   }
 
   /**

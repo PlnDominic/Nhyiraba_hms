@@ -16,7 +16,14 @@ export const OfflineReservationProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const { isInitialized, getReservations } = useOfflineDatabase();
+  const {
+    isInitialized,
+    getReservations,
+    createGuest,
+    createReservation: dbCreateReservation,
+    updateReservation: dbUpdateReservation,
+    deleteReservation: dbDeleteReservation
+  } = useOfflineDatabase();
 
   useEffect(() => {
     if (isInitialized) {
@@ -38,8 +45,39 @@ export const OfflineReservationProvider = ({ children }) => {
     }
   };
 
+  const afterChange = async () => {
+    await loadReservations();
+    window.dispatchEvent(new CustomEvent('offlineDataChanged'));
+  };
+
+  // Every reservation belongs to a guest; create one when only a name is given.
+  const createReservation = async (data) => {
+    const guestId = data.guest_id ?? await createGuest({
+      name: data.guest_name,
+      email: data.email,
+      phone: data.phone,
+      status: 'Reserved'
+    });
+    const id = await dbCreateReservation({ ...data, guest_id: guestId, status: data.status || 'confirmed' });
+    await afterChange();
+    return id;
+  };
+
+  const updateReservation = async (id, updates) => {
+    await dbUpdateReservation(id, updates);
+    await afterChange();
+  };
+
+  const deleteReservation = async (id) => {
+    await dbDeleteReservation(id);
+    await afterChange();
+  };
+
   const value = {
     reservations,
+    createReservation,
+    updateReservation,
+    deleteReservation,
     loading,
     error,
     refreshReservations: loadReservations,
