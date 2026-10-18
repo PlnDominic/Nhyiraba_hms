@@ -6,6 +6,7 @@ import {
   createReservation as createReservationService,
   updateReservation as updateReservationService
 } from '../services/reservationService';
+import { findStaleRooms } from '../utils/roomReconcile';
 import { sendSmsNotification, reservationSmsData } from '../services/smsService';
 import {
   validateRoomAvailability,
@@ -119,7 +120,7 @@ function reducer(state, action) {
     case 'UPDATE_ROOM_STATUS':
       const updatedRooms = state.rooms.map(room =>
         room.id === action.payload.roomId
-          ? { ...room, status: action.payload.status, guest: action.payload.guest || room.guest }
+          ? { ...room, status: action.payload.status, guest: 'guest' in action.payload ? action.payload.guest : room.guest }
           : room
       );
       return { ...state, rooms: updatedRooms };
@@ -196,6 +197,37 @@ export const RoomReservationProvider = ({ children }) => {
   const fetchTimeoutRef = useRef(null);
   const prefetchTriggeredRef = useRef(false);
 
+  // Free rooms that are marked Occupied / Reserved although no guest or
+  // reservation is attached to them (left behind by edits, deletes, failed
+  // writes or offline sync). Works from fresh database reads, and does
+  // nothing unless every read succeeded.
+  const reconcileRoomStatuses = useCallback(async () => {
+    try {
+      const [roomsRes, reservationsRes, guestsRes] = await Promise.all([
+        supabase.from('rooms').select('*'),
+        supabase.from('reservations').select('id, room_id, room_number, status'),
+        supabase.from('guests').select('id, room, status')
+      ]);
+      if (roomsRes.error || reservationsRes.error || guestsRes.error) return 0;
+
+      const stale = findStaleRooms(roomsRes.data, reservationsRes.data, guestsRes.data);
+      for (const { room, status } of stale) {
+        const { error } = await supabase
+          .from('rooms')
+          .update({ status, guest: null, updated_at: new Date().toISOString() })
+          .eq('id', room.id);
+        if (!error) {
+          dispatch({ type: 'UPDATE_ROOM_STATUS', payload: { roomId: room.id, status, guest: '' } });
+          console.warn(`Room ${room.room_number || room.id} was ${room.status} with no guest or reservation; set to ${status}.`);
+        }
+      }
+      return stale.length;
+    } catch (err) {
+      console.error('Room status reconciliation failed:', err);
+      return 0;
+    }
+  }, []);
+
   // Enhanced refreshData to better handle room data
   const refreshData = useCallback(async (forceRefresh = false) => {
     console.log('refreshData called with forceRefresh:', forceRefresh);
@@ -235,6 +267,9 @@ export const RoomReservationProvider = ({ children }) => {
         console.error('Error fetching reservations:', reservationsError);
         // Don't set error state for reservations failure, just log it
       }
+
+      // Heal rooms whose status no longer matches any guest / reservation
+      await reconcileRoomStatuses();
     } catch (error) {
       console.error('Error during refresh:', error);
       dispatch({ type: 'SET_ERROR', payload: formatError(error) });
@@ -242,7 +277,7 @@ export const RoomReservationProvider = ({ children }) => {
       dispatch({ type: 'SET_LOADING', payload: false });
       dispatch({ type: 'SET_LAST_FETCH_TIME', payload: now });
     }
-  }, [state.isDataFresh, state.rooms.length, state.reservations.length]);
+  }, [state.isDataFresh, state.rooms.length, state.reservations.length, reconcileRoomStatuses]);
 
   // Modified getRooms function
   const fetchRoomsFromSupabase = async () => {
@@ -614,6 +649,9 @@ export const RoomReservationProvider = ({ children }) => {
         throw error;
       }
 
+      // Cancelling / checking out / moving a reservation must release its room
+      await reconcileRoomStatuses();
+
       sendSmsNotification('reservation_updated', reservationData.phoneNumber || reservationData.guest_phone, {
         guestName: reservationData.guestName || reservationData.guest_name,
         roomNumber: reservationData.roomNumber || reservationData.room_number,
@@ -854,6 +892,7 @@ export const RoomReservationProvider = ({ children }) => {
     updateRevenueStats,
     markNoShow,
     reassignRoom,
+    reconcileRoomStatuses,
     testDatabaseConnection
   }), [
     state.rooms,
@@ -874,6 +913,7 @@ export const RoomReservationProvider = ({ children }) => {
     getActiveReservationForRoom,
     markNoShow,
     reassignRoom,
+    reconcileRoomStatuses,
     getReservations,
     updateRoomStatus,
     updateRevenueStats

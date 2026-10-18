@@ -3,6 +3,9 @@ import useOfflineDatabase from '../hooks/useOfflineDatabase';
 
 const OfflineGuestContext = createContext();
 
+// Lets the room / reservation providers reload after guest changes
+const notifyDataChanged = () => window.dispatchEvent(new CustomEvent('offlineDataChanged'));
+
 export const useOfflineGuests = () => {
   const context = useContext(OfflineGuestContext);
   if (!context) {
@@ -48,10 +51,11 @@ export const OfflineGuestProvider = ({ children }) => {
   const addGuest = async (guestData) => {
     try {
       setLoading(true);
-      await createGuest(guestData);
+      const id = await createGuest(guestData);
       await loadGuests(); // Reload to get updated list
+      notifyDataChanged();
       setError(null);
-      return { success: true };
+      return { success: true, id };
     } catch (err) {
       console.error('Error adding guest:', err);
       setError('Failed to add guest');
@@ -66,6 +70,7 @@ export const OfflineGuestProvider = ({ children }) => {
       setLoading(true);
       await updateGuest(guestId, updates);
       await loadGuests(); // Reload to get updated list
+      notifyDataChanged();
       setError(null);
       return { success: true };
     } catch (err) {
@@ -82,6 +87,7 @@ export const OfflineGuestProvider = ({ children }) => {
       setLoading(true);
       await deleteGuest(guestId);
       await loadGuests(); // Reload to get updated list
+      notifyDataChanged();
       setError(null);
       return { success: true };
     } catch (err) {
@@ -108,13 +114,21 @@ export const OfflineGuestProvider = ({ children }) => {
     );
   };
 
+  // Names the guest screens use; they expect the created guest back (or null)
+  const addGuestToList = async (guestData) => {
+    const result = await addGuest(guestData);
+    return result.success ? { ...guestData, id: result.id } : null;
+  };
+
   const value = {
     guestList,
     loading,
     error,
     addGuest,
+    addGuestToList,
     editGuest,
     removeGuest,
+    deleteGuest: removeGuest,
     getGuestById,
     searchGuests,
     refreshGuests: loadGuests,

@@ -108,7 +108,7 @@ export const useOfflineDatabase = () => {
       return guestId;
     } catch (err) {
       setError(err.message);
-      return null;
+      throw err;
     } finally {
       setIsLoading(false);
     }
@@ -124,9 +124,90 @@ export const useOfflineDatabase = () => {
       return reservationId;
     } catch (err) {
       setError(err.message);
-      return null;
+      throw err;
     } finally {
       setIsLoading(false);
+    }
+  }, []);
+
+
+  const getGuests = useCallback(async (...args) => {
+    setError(null);
+    try {
+      return await offlineDatabaseService.getGuests(...args);
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  }, []);
+
+  const updateGuest = useCallback(async (...args) => {
+    setError(null);
+    try {
+      return await offlineDatabaseService.updateGuest(...args);
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  }, []);
+
+  const deleteGuest = useCallback(async (...args) => {
+    setError(null);
+    try {
+      return await offlineDatabaseService.deleteGuest(...args);
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  }, []);
+
+  const getReservations = useCallback(async (...args) => {
+    setError(null);
+    try {
+      return await offlineDatabaseService.getReservations(...args);
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  }, []);
+
+  const updateReservation = useCallback(async (...args) => {
+    setError(null);
+    try {
+      return await offlineDatabaseService.updateReservation(...args);
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  }, []);
+
+  const deleteReservation = useCallback(async (...args) => {
+    setError(null);
+    try {
+      return await offlineDatabaseService.deleteReservation(...args);
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  }, []);
+
+  const reconcileRoomStatuses = useCallback(async (...args) => {
+    setError(null);
+    try {
+      return await offlineDatabaseService.reconcileRoomStatuses(...args);
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  }, []);
+
+  const getRevenue = useCallback(async (...args) => {
+    setError(null);
+    try {
+      return await offlineDatabaseService.getRevenue(...args);
+    } catch (err) {
+      setError(err.message);
+      throw err;
     }
   }, []);
 
@@ -185,7 +266,15 @@ export const useOfflineDatabase = () => {
     updateRoomStatus,
     getRoomByNumber,
     createGuest,
+    getGuests,
+    updateGuest,
+    deleteGuest,
     createReservation,
+    getReservations,
+    updateReservation,
+    deleteReservation,
+    reconcileRoomStatuses,
+    getRevenue,
     getUserByEmail,
     createUser,
     getStats,

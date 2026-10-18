@@ -27,16 +27,35 @@ export const OfflineRoomReservationProvider = ({ children }) => {
     createReservation,
     updateReservation,
     deleteReservation,
+    getGuests,
+    createGuest,
+    updateGuest,
+    reconcileRoomStatuses,
     getRevenue
   } = useOfflineDatabase();
+
+  const norm = (v) => String(v ?? '').toLowerCase().replace(/[_-]/g, ' ').trim();
+  const sameRoom = (a, b) => a !== null && a !== undefined && b !== null && b !== undefined && Number(a) === Number(b);
 
   // Load initial data when database is ready
   useEffect(() => {
     if (isInitialized) {
-      loadRooms();
-      loadReservations();
-      loadRevenue();
+      reconcileRoomStatuses()
+        .catch(err => console.error('Error reconciling room statuses:', err))
+        .finally(() => {
+          loadRooms();
+          loadReservations();
+          loadRevenue();
+        });
     }
+  }, [isInitialized]);
+
+  // Guest and reservation screens announce their changes; keep rooms in step
+  useEffect(() => {
+    if (!isInitialized) return undefined;
+    const reload = () => Promise.all([loadRooms(), loadReservations()]);
+    window.addEventListener('offlineDataChanged', reload);
+    return () => window.removeEventListener('offlineDataChanged', reload);
   }, [isInitialized]);
 
   const loadRooms = async () => {
@@ -72,37 +91,66 @@ export const OfflineRoomReservationProvider = ({ children }) => {
     }
   };
 
-  const checkInGuest = async (roomId, guestData, dates) => {
+  const toDay = (d) => (d ? String(d).split('T')[0] : null);
+
+  // Close whatever is currently attached to a room: in-house guests are checked
+  // out and live reservations are completed. Used by check-out and by "set Available".
+  const releaseRoom = async (roomId, { includeReserved = false } = {}) => {
+    const closable = includeReserved ? ['checked in', 'reserved', 'confirmed'] : ['checked in'];
+
+    const guests = await getGuests();
+    for (const guest of guests) {
+      if (sameRoom(guest.room_id, roomId) && closable.includes(norm(guest.status))) {
+        await updateGuest(guest.id, { status: includeReserved && norm(guest.status) !== 'checked in' ? 'Cancelled' : 'Checked Out' });
+      }
+    }
+
+    const current = await getReservations();
+    for (const res of current) {
+      if (sameRoom(res.room_id, roomId) && closable.includes(norm(res.status))) {
+        await updateReservation(res.id, { status: norm(res.status) === 'checked in' ? 'checked_out' : 'cancelled' });
+      }
+    }
+  };
+
+  const checkInGuest = async (roomId, guestData, dates = {}) => {
     try {
       setLoading(true);
-      
-      // Update room status to occupied
-      await updateRoomStatus(roomId, 'Occupied', {
-        guestName: guestData.name,
-        checkInDate: dates.checkIn,
-        checkOutDate: dates.checkOut
+
+      const checkIn = toDay(dates.checkIn) || toDay(new Date().toISOString());
+      const checkOut = toDay(dates.checkOut) || toDay(new Date(Date.now() + 86400000).toISOString());
+
+      // Record the guest and the stay first; the room status follows from them
+      const guestId = await createGuest({
+        name: guestData.name,
+        email: guestData.email,
+        phone: guestData.phone,
+        room_id: roomId,
+        status: 'Checked In',
+        check_in: checkIn,
+        check_out: checkOut
       });
 
-      // Create a reservation record
-      const reservationData = {
-        room_id: roomId,
+      await createReservation({
+        guest_id: guestId,
         guest_name: guestData.name,
-        check_in_date: dates.checkIn,
-        check_out_date: dates.checkOut,
-        status: 'confirmed',
+        room_id: roomId,
+        check_in_date: checkIn,
+        check_out_date: checkOut,
+        status: 'checked_in',
         total_amount: 0 // Will be calculated based on room rate and duration
-      };
+      });
 
-      await createReservation(reservationData);
-
-      // Reload data
       await Promise.all([loadRooms(), loadReservations(), loadRevenue()]);
-      
+
       setError(null);
       return { success: true };
     } catch (err) {
       console.error('Error checking in guest:', err);
       setError('Failed to check in guest');
+      // Never leave a room claiming a guest that was not saved
+      await reconcileRoomStatuses().catch(() => {});
+      await loadRooms();
       return { success: false, error: err.message };
     } finally {
       setLoading(false);
@@ -112,22 +160,11 @@ export const OfflineRoomReservationProvider = ({ children }) => {
   const checkOutGuest = async (roomId) => {
     try {
       setLoading(true);
-      
-      // Update room status to available
-      await updateRoomStatus(roomId, 'Available');
 
-      // Update any active reservations for this room
-      const activeReservations = reservations.filter(
-        res => res.room_id === roomId && res.status === 'confirmed'
-      );
+      await releaseRoom(roomId);
 
-      for (const reservation of activeReservations) {
-        await updateReservation(reservation.id, { status: 'completed' });
-      }
-
-      // Reload data
       await Promise.all([loadRooms(), loadReservations(), loadRevenue()]);
-      
+
       setError(null);
       return { success: true };
     } catch (err) {
@@ -142,31 +179,29 @@ export const OfflineRoomReservationProvider = ({ children }) => {
   const makeReservation = async (reservationData) => {
     try {
       setLoading(true);
-      
-      // Create reservation
-      await createReservation(reservationData);
 
-      // Update room status to reserved if the check-in is today or future
-      const checkInDate = new Date(reservationData.check_in_date);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const guestId = reservationData.guest_id ?? await createGuest({
+        name: reservationData.guest_name,
+        email: reservationData.email,
+        phone: reservationData.phone,
+        status: 'Reserved'
+      });
 
-      if (checkInDate >= today) {
-        await updateRoomStatus(reservationData.room_id, 'Reserved', {
-          guestName: reservationData.guest_name,
-          checkInDate: reservationData.check_in_date,
-          checkOutDate: reservationData.check_out_date
-        });
-      }
+      await createReservation({
+        ...reservationData,
+        guest_id: guestId,
+        status: reservationData.status || 'confirmed'
+      });
 
-      // Reload data
       await Promise.all([loadRooms(), loadReservations(), loadRevenue()]);
-      
+
       setError(null);
       return { success: true };
     } catch (err) {
       console.error('Error making reservation:', err);
       setError('Failed to make reservation');
+      await reconcileRoomStatuses().catch(() => {});
+      await loadRooms();
       return { success: false, error: err.message };
     } finally {
       setLoading(false);
@@ -176,25 +211,18 @@ export const OfflineRoomReservationProvider = ({ children }) => {
   const cancelReservation = async (reservationId) => {
     try {
       setLoading(true);
-      
-      // Find the reservation
-      const reservation = reservations.find(res => res.id === reservationId);
+
+      const current = await getReservations();
+      const reservation = current.find(res => Number(res.id) === Number(reservationId));
       if (!reservation) {
         throw new Error('Reservation not found');
       }
 
-      // Update reservation status to cancelled
+      // Cancelling frees the room automatically (unless someone else holds it)
       await updateReservation(reservationId, { status: 'cancelled' });
 
-      // If room is reserved, make it available
-      const room = rooms.find(r => r.id === reservation.room_id);
-      if (room && room.status === 'Reserved') {
-        await updateRoomStatus(reservation.room_id, 'Available');
-      }
-
-      // Reload data
       await Promise.all([loadRooms(), loadReservations(), loadRevenue()]);
-      
+
       setError(null);
       return { success: true };
     } catch (err) {
@@ -206,18 +234,53 @@ export const OfflineRoomReservationProvider = ({ children }) => {
     }
   };
 
+  // Room-card actions. Occupied / Reserved only make sense with a guest behind
+  // them, so those create the guest + stay; Available releases the room.
   const updateRoomStatusOnly = async (roomId, status, metadata = {}) => {
     try {
       setLoading(true);
-      
-      await updateRoomStatus(roomId, status, metadata);
-      await loadRooms();
-      
+
+      const target = norm(status);
+      if ((target === 'occupied' || target === 'reserved') && metadata.guestName) {
+        const alreadyHeld = (await getGuests()).some(
+          g => sameRoom(g.room_id, roomId) && norm(g.status) === (target === 'occupied' ? 'checked in' : 'reserved')
+        );
+        if (!alreadyHeld) {
+          const checkIn = toDay(metadata.checkInDate) || toDay(new Date().toISOString());
+          const checkOut = toDay(metadata.checkOutDate) || toDay(new Date(Date.now() + 86400000).toISOString());
+          const guestId = await createGuest({
+            name: metadata.guestName,
+            room_id: roomId,
+            status: target === 'occupied' ? 'Checked In' : 'Reserved',
+            check_in: checkIn,
+            check_out: checkOut
+          });
+          await createReservation({
+            guest_id: guestId,
+            guest_name: metadata.guestName,
+            room_id: roomId,
+            check_in_date: checkIn,
+            check_out_date: checkOut,
+            status: target === 'occupied' ? 'checked_in' : 'confirmed',
+            total_amount: 0
+          });
+        }
+      } else if (target === 'available') {
+        await releaseRoom(roomId, { includeReserved: true });
+        await updateRoomStatus(roomId, 'Available');
+      } else {
+        await updateRoomStatus(roomId, status, metadata);
+      }
+
+      await Promise.all([loadRooms(), loadReservations()]);
+
       setError(null);
       return { success: true };
     } catch (err) {
       console.error('Error updating room status:', err);
       setError('Failed to update room status');
+      await reconcileRoomStatuses().catch(() => {});
+      await loadRooms();
       return { success: false, error: err.message };
     } finally {
       setLoading(false);
