@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { useRoomReservation } from '../context/RoomReservationContext';
 import { StepModal, Step, Field, Counter, RoomCards, DateInput, ReviewList } from './ui/StepModal';
+import DuplicateGuestHint from './DuplicateGuestHint';
 
 const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
   const { theme } = useTheme();
@@ -181,6 +182,9 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
             </Field>
             <Field label="Adults"><Counter name="adults" value={formData.adults} min={1} max={6} onChange={setCount('adults')} /></Field>
             <Field label="Children"><Counter name="children" value={formData.children} min={0} max={4} onChange={setCount('children')} /></Field>
+            <div className="sm-span">
+              <DuplicateGuestHint name={formData.guestName} phone={formData.phoneNumber} />
+            </div>
           </div>
         </Step>
       );

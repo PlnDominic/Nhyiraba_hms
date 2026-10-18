@@ -3,6 +3,8 @@ import 'react-datepicker/dist/react-datepicker.css';
 import { useTheme } from '../context/ThemeContext';
 import { useRoomReservation } from '../context/RoomReservationContext';
 import { StepModal, Step, Field, RoomCards, DateInput, ReviewList } from './ui/StepModal';
+import DuplicateGuestHint from './DuplicateGuestHint';
+import { sendSmsNotification } from '../services/smsService';
 
 const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
     const { theme } = useTheme();
@@ -28,6 +30,7 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
     const [guestInfo, setGuestInfo] = useState(initialFormState);
     const [errors, setErrors] = useState({});
     const [step, setStep] = useState(0);
+    const [email, setEmail] = useState('');
 
     // Reset form when modal opens - use useCallback to memoize this function
     useEffect(() => {
@@ -38,6 +41,7 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
             });
             setErrors({});
             setStep(0);
+            setEmail('');
         }
     }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -68,6 +72,7 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
     const validate = useCallback(() => {
         const newErrors = {};
         if (!guestInfo.fullName || !guestInfo.fullName.trim()) newErrors.fullName = 'Full Name is required';
+        if (!String(guestInfo.phone || '').trim() && !String(email || '').trim()) newErrors.phone = 'Enter a phone number or email address';
         if (!guestInfo.room) newErrors.room = 'Room is required';
         if (!guestInfo.checkIn) newErrors.checkIn = 'Check In is required';
         if (!guestInfo.checkOut) {
@@ -76,7 +81,7 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
             newErrors.checkOut = 'Check Out must be after Check In';
         }
         return newErrors;
-    }, [guestInfo]);
+    }, [guestInfo, email]);
 
     const handleCompleteCheckIn = useCallback(async () => {
         const validationErrors = validate();
@@ -97,6 +102,7 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
                     firstName,
                     lastName,
                     phone: guestInfo.phone,
+                    email: email,
                     gender: guestInfo.gender,
                     room: guestInfo.room,
                     checkIn: guestInfo.checkIn,
@@ -108,13 +114,21 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
                 };
                 
                 console.log('Submitting guest data:', newGuest);
-                await onAddGuest(newGuest);
+                const result = await onAddGuest(newGuest);
+                if (result?.success === false) return; // not saved: no confirmation, keep the modal open
+                const room = rooms.find(r => String(r.id) === String(guestInfo.room));
+                sendSmsNotification('checked_in', guestInfo.phone, {
+                    guestName: trimmedName,
+                    roomNumber: room?.room_number || guestInfo.room,
+                    checkInDate: guestInfo.checkIn,
+                    checkOutDate: guestInfo.checkOut
+                });
                 onClose(); // Close the modal after adding the guest
             } catch (error) {
                 console.error('Error adding guest:', error);
             }
         }
-    }, [guestInfo, validate, onAddGuest, onClose]);
+    }, [guestInfo, email, validate, onAddGuest, onClose, rooms]);
 
     const money = (n) => `₵${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
     const priceOf = (room) => {
@@ -134,7 +148,7 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
 
     const goNext = () => {
         const all = validate();
-        const keys = step === 0 ? ['fullName'] : ['room', 'checkIn', 'checkOut'];
+        const keys = step === 0 ? ['fullName', 'phone'] : ['room', 'checkIn', 'checkOut'];
         const stepErrors = {};
         keys.forEach(k => { if (all[k]) stepErrors[k] = all[k]; });
         setErrors(stepErrors);
@@ -149,8 +163,11 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
                         <Field label="Full name" error={errors.fullName} span>
                             <input className="sm-input" type="text" name="fullName" value={guestInfo.fullName} onChange={handleChange} placeholder="Enter full name" autoComplete="off" autoFocus />
                         </Field>
-                        <Field label="Phone (optional)">
+                        <Field label="Phone" error={errors.phone}>
                             <input className="sm-input" type="tel" name="phone" value={guestInfo.phone} onChange={handleChange} placeholder="Enter phone number" autoComplete="off" />
+                        </Field>
+                        <Field label="Email (optional)">
+                            <input className="sm-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" autoComplete="off" />
                         </Field>
                         <Field label="Gender">
                             <select className="sm-select" name="gender" value={guestInfo.gender} onChange={handleChange}>
@@ -160,6 +177,9 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
                                 <option value="Other">Other</option>
                             </select>
                         </Field>
+                        <div className="sm-span">
+                            <DuplicateGuestHint name={guestInfo.fullName} phone={guestInfo.phone} email={email} />
+                        </div>
                     </div>
                 </Step>
             );

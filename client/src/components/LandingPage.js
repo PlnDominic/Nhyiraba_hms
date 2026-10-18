@@ -1,145 +1,79 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useUser } from '../context/UserContext';
+import React from 'react';
+import { Link } from 'react-router-dom';
+import './LandingPage.css';
 
+const FEATURES = [
+  { icon: 'fa-calendar-check', title: 'Reservations & check-in', text: 'Book, confirm and check guests in with room conflicts caught before they happen.' },
+  { icon: 'fa-bed', title: 'Live room board', text: 'See which rooms are available, occupied or being cleaned, updated as it changes.' },
+  { icon: 'fa-broom', title: 'Housekeeping & maintenance', text: 'Assign cleaning and repairs, and keep rooms out of circulation until they are ready.' },
+  { icon: 'fa-comment-sms', title: 'Guest SMS updates', text: 'Confirmations and reminders go to guests automatically at every stage of their stay.' },
+  { icon: 'fa-chart-line', title: 'Reports that matter', text: 'Occupancy, revenue and activity at a glance for managers and the board.' },
+  { icon: 'fa-wifi', title: 'Works offline', text: 'Keep working when the connection drops; changes sync as soon as it returns.' }
+];
 
 function LandingPage() {
-  const { setCurrentUser } = useUser();
-  const navigate = useNavigate();
-  const [showLoginOptions, setShowLoginOptions] = useState(false);
-
-  // Function to login as admin or manager
-  const handleLogin = (role) => {
-    setCurrentUser({
-      id: `demo-${role}-id`,
-      email: `${role}@example.com`,
-      role: role,
-      fullName: `${role.charAt(0).toUpperCase() + role.slice(1)} User`,
-      position: role === 'admin' ? 'Administrator' : 'Hotel Manager',
-      department: 'Management',
-      contactNumber: '123-456-7890',
-      avatar_url: null
-    });
-
-    // Redirect to the appropriate page
-    if (role === 'admin') {
-      navigate('/admin/access-control');
-    } else if (role === 'manager') {
-      navigate('/manager/access-control');
-    } else {
-      navigate('/dashboard');
-    }
-  };
-
   return (
-    <div 
-      className="landing-page relative min-h-screen flex flex-col"
-      style={{
-        background: '#e94e00',
-      }}
-    >
+    <div className="lp">
+      <header className="lp-nav">
+        <div className="lp-brand">
+          <img src="/logo256.png" alt="" />
+          <span>Nhyiraba</span>
+        </div>
+        <nav className="lp-nav-actions" aria-label="Account">
+          <Link to="/request-access" className="lp-btn lp-btn-ghost lp-btn-sm">Request access</Link>
+          <Link to="/login" className="lp-btn lp-btn-primary lp-btn-sm">Log in</Link>
+        </nav>
+      </header>
 
-
-      {/* Main Content - Centered */}
-      <div className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8 py-8">
-        <div className="w-full max-w-md lg:max-w-4xl">
-          <div className="flex flex-col lg:flex-row items-center gap-8 lg:gap-12">
-            
-            {/* Content Section */}
-            <div className="w-full lg:w-1/2 text-center lg:text-left space-y-6">
-              
-              {/* Logo Container - Matching Splash Screen */}
-              <div className="flex justify-center lg:justify-start mb-4">
-                <div 
-                  className="bg-white p-6 shadow-2xl border-4"
-                  style={{
-                    borderRadius: '16px',
-                    borderColor: '#ffffff',
-                  }}
-                >
-                  <img
-                    src="/logo256.png"
-                    alt="Nhyiraba Hotel Logo"
-                    className="w-20 h-20 sm:w-24 sm:h-24 object-contain"
-                  />
-                </div>
-              </div>
-
-              {/* Hotel Name - Extra Bold like Splash Screen */}
-              <h1 
-                className="text-white text-4xl sm:text-5xl lg:text-6xl mb-2"
-                style={{
-                  fontFamily: "'Playfair Display', serif",
-                  fontWeight: '900',
-                  textShadow: '0 4px 20px rgba(0,0,0,0.3)',
-                }}
-              >
-                Nhyiraba
-              </h1>
-
-              {/* Subtitle */}
-              <h2 className="text-white/90 text-xl sm:text-2xl font-light tracking-wide">
-                Hotel Management System
-              </h2>
-
-              {/* Decorative Line */}
-              <div className="h-0.5 bg-gradient-to-r from-transparent via-white to-transparent w-full max-w-xs mx-auto lg:mx-0" />
-
-              {/* Description */}
-              <p className="text-white/80 text-base sm:text-lg leading-relaxed max-w-md mx-auto lg:mx-0">
-                Experience the future of hotel management with our comprehensive solution designed for modern establishments.
-              </p>
-
-              {/* Buttons */}
-              <div className="flex flex-col sm:flex-row gap-4 pt-4 justify-center lg:justify-start">
-                <Link 
-                  to="/login" 
-                  className="bg-white text-orange-600 hover:bg-orange-50 px-8 py-3 rounded-xl font-semibold transition-all transform hover:scale-105 shadow-lg flex items-center justify-center gap-2"
-                  style={{ color: '#e94e00' }}
-                >
-                  <i className="fas fa-sign-in-alt"></i>
-                  <span>Login to Dashboard</span>
-                </Link>
-                <Link 
-                  to="/request-access" 
-                  className="bg-transparent border-2 border-white text-white hover:bg-white/10 px-8 py-3 rounded-xl font-semibold transition-all transform hover:scale-105 flex items-center justify-center gap-2"
-                >
-                  <i className="fas fa-user-plus"></i>
-                  <span>Request Access</span>
-                </Link>
-              </div>
-
-
+      <main>
+        <section className="lp-hero">
+          <div className="lp-hero-bg" style={{ background: "url(/hero1.jpg) center 40% / cover no-repeat" }} role="img" aria-label="Nhyiraba Hotel swimming pool at night" />
+          <div className="lp-hero-inner">
+            <span className="lp-eyebrow"><i className="fas fa-star" aria-hidden="true" /> Hotel management system</span>
+            <h1 className="lp-title">Run Nhyiraba Hotel with <em>calm</em> and confidence</h1>
+            <p className="lp-lead">
+              One place for reservations, rooms, guests, housekeeping and reports, built for the front desk and the team behind it.
+            </p>
+            <div className="lp-cta">
+              <Link to="/login" className="lp-btn lp-btn-primary"><i className="fas fa-right-to-bracket" aria-hidden="true" /> Log in to dashboard</Link>
+              <Link to="/request-access" className="lp-btn lp-btn-ghost"><i className="fas fa-user-plus" aria-hidden="true" /> Request access</Link>
             </div>
-
-            {/* Image Section - Desktop Only */}
-            <div className="hidden lg:block w-full lg:w-1/2">
-              <div className="relative rounded-2xl overflow-hidden shadow-2xl border-4 border-white/20">
-                <img
-                  src="/hero1.jpg"
-                  alt="Luxury Hotel - Nhyiraba Hotel"
-                  className="w-full h-auto object-cover"
-                />
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6">
-                  <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md border border-white/30 text-white px-4 py-2 rounded-full text-sm font-medium">
-                    <i className="fas fa-star text-yellow-400"></i>
-                    <span>Luxury Hotel Experience</span>
-                  </div>
-                </div>
-              </div>
+            <div className="lp-stats">
+              <div className="lp-stat"><strong>24/7</strong><span>Front desk ready</span></div>
+              <div className="lp-stat"><strong>Real-time</strong><span>Room status</span></div>
+              <div className="lp-stat"><strong>Offline</strong><span>Safe to keep working</span></div>
             </div>
           </div>
+        </section>
 
+        <section className="lp-section" aria-labelledby="lp-features">
+          <div className="lp-section-inner">
+            <h2 id="lp-features">Everything the hotel needs, in one system</h2>
+            <p className="lp-section-lead">From the first booking to checkout and the reports after, every team works from the same up-to-date picture.</p>
+            <div className="lp-grid">
+              {FEATURES.map((f) => (
+                <article key={f.title} className="lp-card">
+                  <div className="lp-icon"><i className={`fas ${f.icon}`} aria-hidden="true" /></div>
+                  <h3>{f.title}</h3>
+                  <p>{f.text}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
 
-        </div>
-      </div>
+        <section className="lp-band" aria-label="Get started">
+          <div>
+            <h2>Part of the team?</h2>
+            <p>Sign in to get to today's arrivals, rooms and tasks.</p>
+          </div>
+          <Link to="/login" className="lp-btn lp-btn-light">Log in</Link>
+        </section>
+      </main>
 
-      {/* Footer Text */}
-      <div className="text-center pb-6 px-4">
-        <p className="text-white/60 text-sm">
-          Powered by <span className="font-semibold text-white">Ecstasy Geospatial Services</span>
-        </p>
-      </div>
+      <footer className="lp-foot">
+        Powered by <strong>Ecstasy Geospatial Services</strong>
+      </footer>
     </div>
   );
 }

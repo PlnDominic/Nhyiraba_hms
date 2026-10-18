@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import SplashScreen from './components/SplashScreen';
 import { UserProvider } from './context/UserContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -19,6 +19,7 @@ import ConditionalProfileModal from './components/ConditionalProfileModal';
 import SettingsPage from './components/SettingsPage';
 import { Toaster } from 'react-hot-toast';
 import ProtectedRoute from './components/ProtectedRoute';
+import SyncStatus from './components/SyncStatus';
 import DebugUserContext from './components/DebugUserContext';
 
 // Use lazy loading for route components
@@ -38,6 +39,7 @@ const RequestAccessPage = lazy(() => import('./pages/RequestAccessPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage'));
 const NotFound = lazy(() => import('./components/NotFound'));
 const RealAccountSetup = lazy(() => import('./components/RealAccountSetup'));
 const StaffPage = lazy(() => import('./components/StaffPage'));
@@ -47,11 +49,6 @@ const RestaurantPage = lazy(() => import('./components/restaurant/RestaurantPage
 const SupermarketPage = lazy(() => import('./components/supermarket/SupermarketPage'));
 const PoolPage = lazy(() => import('./components/PoolPage'));
 const PoolCheckInForm = lazy(() => import('./components/pool/PoolCheckInForm'));
-const OfflineDatabaseTest = lazy(() => import('./components/OfflineDatabaseTest'));
-const SimpleDatabaseTest = lazy(() => import('./components/SimpleDatabaseTest'));
-const OfflineRoomsManager = lazy(() => import('./components/OfflineRoomsManager'));
-const OfflineEnabledRoomsPage = lazy(() => import('./components/OfflineEnabledRoomsPage'));
-const OfflineEnabledDashboard = lazy(() => import('./components/OfflineEnabledDashboard'));
 const RevenuePage = lazy(() => import('./components/revenue/RevenuePage'));
 const ReservationOperationsPage = lazy(() => import('./components/ReservationOperationsPage'));
 
@@ -219,11 +216,9 @@ const App = () => {
           <ManagerAccessControl key="manager-access" />
         </ProtectedRoute>
       } />
-      <Route path="/test-access-requests" element={
-        <ProtectedRoute>
-          <TestAccessRequests key="test-access" />
-        </ProtectedRoute>
-      } />
+      {process.env.NODE_ENV !== 'production' && (
+        <Route path="/test-access-requests" element={<ProtectedRoute><TestAccessRequests key="test-access" /></ProtectedRoute>} />
+      )}
       <Route path="/time-attendance" element={
         <ProtectedRoute>
           <StaffTimeAttendancePage key="time-attendance" />
@@ -247,46 +242,31 @@ const App = () => {
         </ProtectedRoute>
       } />
 
-      <Route path="/offline-test" element={
-        <OfflineDatabaseTest key="offline-test" />
-      } />
+      {/* The old stand-alone offline mode is gone: the main app itself works offline now (see src/offline) */}
+      <Route path="/offline-test" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/simple-test" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/offline-rooms" element={<Navigate to="/rooms" replace />} />
+      <Route path="/offline/rooms" element={<Navigate to="/rooms" replace />} />
+      <Route path="/offline/dashboard" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/offline/*" element={<Navigate to="/dashboard" replace />} />
 
-      <Route path="/simple-test" element={
-        <SimpleDatabaseTest key="simple-test" />
-      } />
+      {process.env.NODE_ENV !== 'production' && (
+        <Route path="/setup-accounts" element={<RealAccountSetup key="setup-accounts" />} />
+      )}
 
-      <Route path="/offline-rooms" element={
-        <OfflineRoomsManager key="offline-rooms" />
-      } />
-
-      <Route path="/offline/rooms" element={
-        <ProtectedRoute>
-          <OfflineEnabledRoomsPage key="offline-rooms" />
-        </ProtectedRoute>
-      } />
-
-      <Route path="/offline/dashboard" element={
-        <ProtectedRoute>
-          <OfflineEnabledDashboard key="offline-dashboard" />
-        </ProtectedRoute>
-      } />
-
-      <Route path="/offline/*" element={
-        <OfflineRoomsManager key="offline-hotel" />
-      } />
-
-      <Route path="/setup-accounts" element={
-        <RealAccountSetup key="setup-accounts" />
-      } />
-
-      <Route path="/debug-user-context" element={
-        <DebugUserContext key="debug-user-context" />
-      } />
+      {process.env.NODE_ENV !== 'production' && (
+        <Route path="/debug-user-context" element={<DebugUserContext key="debug-user-context" />} />
+      )}
 
       <Route path="/forgot-password" element={
         <ForgotPasswordPage key="forgot-password" />
       } />
 
+      <Route path="/change-password" element={
+        <ProtectedRoute>
+          <ChangePasswordPage key="change-password" />
+        </ProtectedRoute>
+      } />
       <Route path="/reset-password" element={
         <ResetPasswordPage key="reset-password" />
       } />
@@ -321,6 +301,7 @@ const App = () => {
                         <Suspense fallback={<LoadingFallback />}>
                           {routes}
                         </Suspense>
+                        <SyncStatus />
                         <Toaster position="top-right" toastOptions={{
                           style: {
                             background: '#333',

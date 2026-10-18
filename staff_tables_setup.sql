@@ -96,22 +96,7 @@ CREATE INDEX IF NOT EXISTS idx_time_entries_entry_date ON public.time_entries(en
 CREATE INDEX IF NOT EXISTS idx_time_entries_entry_type ON public.time_entries(entry_type);
 CREATE INDEX IF NOT EXISTS idx_time_entries_timestamp ON public.time_entries(entry_timestamp);
 
--- ======================================================================
--- 4. STAFF CREDENTIALS TABLE
--- ======================================================================
-
-CREATE TABLE IF NOT EXISTS public.staff_credentials (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    email TEXT NOT NULL,
-    password TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    is_used BOOLEAN DEFAULT FALSE,
-    UNIQUE(user_id)
-);
-
--- Index for staff_credentials
-CREATE INDEX IF NOT EXISTS idx_staff_credentials_user_id ON public.staff_credentials(user_id);
+-- (4. staff_credentials was removed: the app never stores passwords)
 
 -- ======================================================================
 -- 5. TRAINING MODULES TABLE
@@ -357,7 +342,6 @@ $$ LANGUAGE plpgsql;
 ALTER TABLE public.staff ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.staff_schedules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.time_entries ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.staff_credentials ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.training_modules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.staff_trainings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.performance_metrics ENABLE ROW LEVEL SECURITY;
@@ -407,17 +391,6 @@ CREATE POLICY "Users can update their own time entries" ON public.time_entries
     USING (
         staff_id IN (SELECT id FROM public.staff WHERE user_id = auth.uid())
         OR EXISTS (SELECT 1 FROM user_profiles WHERE user_id = auth.uid() AND role IN ('admin', 'administrator', 'manager'))
-    );
-
--- Staff credentials policies
-CREATE POLICY "Users can view own credentials" ON public.staff_credentials
-    FOR SELECT TO authenticated
-    USING (user_id = auth.uid());
-
-CREATE POLICY "Admins can manage all credentials" ON public.staff_credentials
-    FOR ALL TO authenticated
-    USING (
-        EXISTS (SELECT 1 FROM user_profiles WHERE user_id = auth.uid() AND role IN ('admin', 'administrator'))
     );
 
 -- Training modules policies

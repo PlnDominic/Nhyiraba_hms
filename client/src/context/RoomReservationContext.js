@@ -258,7 +258,10 @@ export const RoomReservationProvider = ({ children }) => {
 
       // Also fetch reservations
       try {
-        const reservationsData = await getReservations();
+        // The service answers { data, error }, not a bare array
+        const reservationsResult = await getReservations();
+        if (reservationsResult?.error) throw reservationsResult.error;
+        const reservationsData = Array.isArray(reservationsResult) ? reservationsResult : reservationsResult?.data;
         if (reservationsData && Array.isArray(reservationsData)) {
           console.log(`Dispatching ${reservationsData.length} reservations to state`);
           dispatch({ type: 'SET_RESERVATIONS', payload: reservationsData });
@@ -827,6 +830,13 @@ export const RoomReservationProvider = ({ children }) => {
   };
 
   const { loading: userLoading } = useUser();
+
+  // Offline changes have just been uploaded (or rejected): reload so the screen shows the server's truth
+  useEffect(() => {
+    const onSynced = () => refreshData(true);
+    window.addEventListener('hms-data-synced', onSynced);
+    return () => window.removeEventListener('hms-data-synced', onSynced);
+  }, [refreshData]);
 
   // Load initial data and set up real-time subscriptions
   useEffect(() => {

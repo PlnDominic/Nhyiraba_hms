@@ -31,4 +31,15 @@ $PSQL -f "$ROOT/sms_logs_migration.sql" 2>/dev/null
 # the live project uses the non-recursive user_profiles policies from this script
 sed -n '7,50p' "$ROOT/fix_infinite_recursion_rls.sql" | $PSQL 2>/dev/null
 $PSQL -f "$ROOT/supabase/migrations/20261022_authorization.sql" 2>/dev/null
-psql -h "$DIR" -p "$PORT" -U postgres -q -tA -f "$ROOT/supabase/tests/authorization.test.sql" 2>&1 | grep -v "^$" | sed 's/^psql:[^ ]* NOTICE:  //;s/^NOTICE:  //'
+run_sql_test() { psql -h "$DIR" -p "$PORT" -U postgres -q -tA -v ON_ERROR_STOP=1 "$@" 2>&1 | grep -v "^$" | sed 's/^psql:[^ ]* NOTICE:  //;s/^NOTICE:  //'; test "${PIPESTATUS[0]}" = "0"; }
+run_sql_test -f "$ROOT/supabase/tests/authorization.test.sql"
+
+# Password removal: start from the old insecure state, then migrate
+cd "$ROOT"
+$PSQL -f supabase/tests/fixtures/legacy_plaintext_credentials.sql
+# prove the fixture reproduces the hole: an ordinary signed-in user can read someone else's password
+LEAK=$(psql -h "$DIR" -p "$PORT" -U postgres -tA -c "SET ROLE authenticated; SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000e2',false); SELECT password FROM public.staff_credentials" | grep -c "Welcome123" || true)
+[ "$LEAK" = "1" ] || { echo "FAIL fixture does not reproduce the leak"; exit 1; }
+echo "ok  (before) a normal signed-in user could read another user's plain-text password"
+$PSQL -f supabase/migrations/20261023_remove_plaintext_passwords.sql 2>/dev/null
+run_sql_test -f supabase/tests/remove_plaintext_passwords.test.sql

@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import { createGuest, getGuests, updateGuest, deleteGuest as deleteGuestService } from '../services/guestService';
 import supabase from '../supabaseClient';
 import { useRoomReservation } from './RoomReservationContext';
@@ -480,6 +480,15 @@ export const GuestProvider = ({ children }) => {
             };
         }
     };
+
+    // Offline changes have just been uploaded (or rejected): reload the guest list
+    const refreshGuestsRef = useRef(refreshGuests);
+    refreshGuestsRef.current = refreshGuests;
+    useEffect(() => {
+        const onSynced = () => refreshGuestsRef.current();
+        window.addEventListener('hms-data-synced', onSynced);
+        return () => window.removeEventListener('hms-data-synced', onSynced);
+    }, []);
 
     return (
         <GuestContext.Provider value={{

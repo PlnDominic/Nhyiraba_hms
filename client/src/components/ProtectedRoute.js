@@ -66,6 +66,11 @@ const ProtectedRoute = ({ children }) => {
       return null;
     }
 
+    // Changing your own password is always allowed
+    if (path === 'change-password') {
+      return null;
+    }
+
     // Grant universal access to offline testing routes and offline pages
     if (path === 'offline-test' || path === 'simple-test' || path === 'offline-rooms' || path === 'offline') {
       return null;
@@ -128,6 +133,11 @@ const ProtectedRoute = ({ children }) => {
   if (!currentUser) {
     console.log('Not authenticated, redirecting to landing page');
     return <Navigate to="/landing" state={{ from: location }} replace />;
+  }
+
+  // Temporary password: nothing else is reachable until it has been replaced
+  if (currentUser.passwordChangeRequired && location.pathname !== '/change-password') {
+    return <Navigate to="/change-password" replace />;
   }
 
   // Check department-based access

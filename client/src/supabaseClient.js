@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { initOffline } from './offline';
 
 // Get Supabase URL and anon key from environment variables
 // Provide fallback values to prevent runtime errors
@@ -95,15 +96,8 @@ const logRLSError = (error, operation, tableName) => {
 };
 
 // Create a custom Supabase client with error handling
-const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true
-  },
-  global: {
-    // Add hooks for logging errors
-    fetch: (...args) => {
+// Fetch used for every Supabase request: logs permission errors and retries once after a 401
+const loggingFetch = (...args) => {
       // Extract request information for better error logging
       const url = args[0];
       const method = args[1]?.method || 'GET';
@@ -171,9 +165,27 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         
         return response;
       });
-    }
-  }
+};
+
+// Works offline: reads come from the device, writes are queued and replayed (see ./offline)
+const offlineAwareFetch = initOffline({
+  baseFetch: loggingFetch,
+  rawFetch: (...args) => fetch(...args),
+  supabaseUrl,
+  anonKey: supabaseAnonKey,
+  getSupabase: () => supabase
 });
+
+// Create a custom Supabase client with error handling
+const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  },
+  global: { fetch: offlineAwareFetch }
+});
+
 
 // Add RLS error logging to specific methods without breaking the API
 const originalFrom = supabase.from;
@@ -341,6 +353,11 @@ export const diagnoseRLSIssues = async () => {
   console.log('RLS diagnosis complete:', results);
   return results;
 };
+
+// End-to-end tests (built with REACT_APP_E2E=true) drive the data layer directly; compiled out otherwise
+if (process.env.REACT_APP_E2E === 'true') {
+  window.__hmsSupabase = supabase;
+}
 
 // Log Supabase client initialization
 console.log(`Supabase client initialized with URL: ${supabaseUrl}`);

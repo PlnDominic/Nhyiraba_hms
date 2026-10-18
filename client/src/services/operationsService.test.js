@@ -76,3 +76,38 @@ describe('helpers', () => {
     expect(friendlyReservationError({ message: 'boom' })).toBe('boom');
   });
 });
+
+describe('buildRoomCharges', () => {
+  const { buildRoomCharges } = require('./operationsService');
+  const room = { id: 7, room_number: 12 };
+  const checkIn = '2026-10-10T12:00:00Z';
+  const order = (over) => ({ id: 'o1', order_type: 'room-service', payment_status: 'unpaid', status: 'delivered', room_number: 12, total_amount: 80, created_at: '2026-10-11T19:00:00Z', ...over });
+
+  it('includes unpaid room-service orders for this room during the stay', () => {
+    const lines = buildRoomCharges({ room, checkIn, orders: [order()] });
+    expect(lines).toEqual([expect.objectContaining({ source: 'restaurant', sourceId: 'o1', amount: 80 })]);
+  });
+
+  it('skips paid, cancelled, other-room, pre-arrival and non room-service orders', () => {
+    const orders = [
+      order({ id: 'a', payment_status: 'paid' }),
+      order({ id: 'b', status: 'cancelled' }),
+      order({ id: 'c', room_number: 13 }),
+      order({ id: 'd', created_at: '2026-10-01T10:00:00Z' }),
+      order({ id: 'e', order_type: 'dine-in' })
+    ];
+    expect(buildRoomCharges({ room, checkIn, orders })).toEqual([]);
+  });
+
+  it('prices completed service requests from the services list, matching room id or number', () => {
+    const requests = [
+      { id: 1, room: '12', service_id: 3, service_name: 'Laundry', status: 'Completed', created_at: '2026-10-11T08:00:00Z' },
+      { id: 2, room: 'Room 7', service_id: 3, service_name: 'Laundry', status: 'Completed', created_at: '2026-10-12T08:00:00Z' },
+      { id: 3, room: '12', service_id: 3, service_name: 'Laundry', status: 'Pending', created_at: '2026-10-12T08:00:00Z' },
+      { id: 4, room: '99', service_id: 3, service_name: 'Laundry', status: 'Completed', created_at: '2026-10-12T08:00:00Z' }
+    ];
+    const lines = buildRoomCharges({ room, checkIn, requests, services: [{ id: 3, price: '25' }] });
+    expect(lines.map((l) => l.sourceId)).toEqual([1, 2]);
+    expect(lines[0]).toMatchObject({ source: 'service', description: 'Laundry', amount: 25 });
+  });
+});

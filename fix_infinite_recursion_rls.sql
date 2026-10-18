@@ -176,13 +176,6 @@ DROP POLICY IF EXISTS "Users can update their own time entries" ON time_entries;
 CREATE POLICY "allow_authenticated_access_time_entries"
 ON time_entries FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
--- Fix staff_credentials
-DROP POLICY IF EXISTS "Users can view own credentials" ON staff_credentials;
-DROP POLICY IF EXISTS "Admins can manage all credentials" ON staff_credentials;
-
-CREATE POLICY "allow_authenticated_access_staff_credentials"
-ON staff_credentials FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
 -- Fix training_modules
 DROP POLICY IF EXISTS "Training modules viewable by authenticated users" ON training_modules;
 DROP POLICY IF EXISTS "Training modules manageable by admins" ON training_modules;

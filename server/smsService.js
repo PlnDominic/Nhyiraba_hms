@@ -130,4 +130,43 @@ const getSmsStatus = async (messageId) => {
   }
 };
 
-module.exports = { sendSms, getSmsStatus, buildMessage, normalizePhone, templates };
+// Bulk messages are written by staff; {name} becomes each recipient's first name.
+const personalise = (template, name) => {
+  const first = String(name || '').trim().split(/\s+/)[0] || 'Guest';
+  return String(template).replace(/\{name\}/gi, first.slice(0, 30));
+};
+const hasPlaceholder = (template) => /\{name\}/i.test(template);
+
+/**
+ * Send one message to many numbers in a single Arkesel request.
+ * `recipients` must already be normalised. Returns { skipped? } or
+ * { results: [{ recipient, success, messageId?, error? }] } and never throws.
+ */
+const sendSmsBatch = async ({ recipients, message }) => {
+  const apiKey = process.env.ARKESEL_API_KEY;
+  if (!apiKey) return { success: false, skipped: true, results: [] };
+  const failAll = (error) => ({ success: false, results: recipients.map((recipient) => ({ recipient, success: false, error })) });
+  try {
+    const response = await fetch(process.env.ARKESEL_API_URL || DEFAULT_API_URL, {
+      method: 'POST',
+      headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sender: process.env.ARKESEL_SENDER_ID || 'Nhyiraba', message, recipients }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || (body.status && body.status !== 'success')) {
+      return failAll(body.message || `Arkesel error (HTTP ${response.status})`);
+    }
+    const items = Array.isArray(body.data) ? body.data : body.data ? [body.data] : [];
+    const results = recipients.map((recipient, i) => {
+      const hit = items.find((item) => normalizePhone(item.recipient || item.phone) === recipient)
+        || (items.length === recipients.length ? items[i] : null);
+      return { recipient, success: true, messageId: hit?.id || null };
+    });
+    return { success: true, results };
+  } catch (error) {
+    console.error('Arkesel batch SMS error:', error);
+    return failAll(error.message);
+  }
+};
+
+module.exports = { sendSms, sendSmsBatch, getSmsStatus, buildMessage, normalizePhone, personalise, hasPlaceholder, templates };

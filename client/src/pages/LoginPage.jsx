@@ -5,7 +5,6 @@ import { useTheme } from '../context/ThemeContext';
 import supabase from '../supabaseClient';
 import { toast } from 'react-hot-toast';
 // Import debug utilities
-import '../debug_login';
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -89,7 +88,8 @@ const LoginPage = () => {
         department: profileData.department,
         contactNumber: profileData.contact_number,
         permissions: profileData.permissions || [],
-        avatar_url: profileData.avatar_url
+        avatar_url: profileData.avatar_url,
+        passwordChangeRequired: Boolean(profileData.password_change_required)
       });
 
       toast.success('Login successful!');
@@ -106,11 +106,14 @@ const LoginPage = () => {
         console.log('3. User does not exist in Supabase Auth');
       }
 
+      const offline = (typeof navigator !== 'undefined' && navigator.onLine === false) || /failed to fetch|network/i.test(err.message || '');
       const deactivated = err.code === 'user_banned' || /banned/i.test(err.message || '');
-      setError(deactivated
-        ? 'This account has been deactivated. Please contact an administrator.'
-        : (err.message || 'Invalid email or password'));
-      toast.error('Login failed');
+      setError(offline
+        ? "You're offline. Signing in needs a connection. Once you have signed in on this device, the app keeps working without one."
+        : deactivated
+          ? 'This account has been deactivated. Please contact an administrator.'
+          : err.message || 'Invalid email or password');
+      toast.error(offline ? "You're offline" : 'Login failed');
     } finally {
       setIsLoading(false);
     }
