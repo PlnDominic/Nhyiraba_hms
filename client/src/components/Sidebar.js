@@ -27,7 +27,8 @@ import {
   faSwimmingPool,
   faShoppingCart,
   faMoneyBillWave,
-  faClock
+  faClock,
+  faClipboardCheck
 } from '@fortawesome/free-solid-svg-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useUser } from '../context/UserContext';
@@ -63,6 +64,7 @@ const Sidebar = ({ activeLink, isOpen, toggleSidebar }) => {
     { name: 'Tasks', path: '/tasks', icon: faClipboardList },
     { name: 'Billing', path: '/billing', icon: faFileInvoiceDollar },
     { name: 'Revenue', path: '/revenue', icon: faMoneyBillWave, show: isAdmin || isManager },
+    { name: 'Operations', path: '/operations', icon: faClipboardCheck, show: isAdmin || isManager },
     { name: 'Services', path: '/services', icon: faWrench },
     {
       name: 'Inventory',

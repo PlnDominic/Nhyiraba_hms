@@ -51,6 +51,7 @@ const OfflineRoomsManager = lazy(() => import('./components/OfflineRoomsManager'
 const OfflineEnabledRoomsPage = lazy(() => import('./components/OfflineEnabledRoomsPage'));
 const OfflineEnabledDashboard = lazy(() => import('./components/OfflineEnabledDashboard'));
 const RevenuePage = lazy(() => import('./components/revenue/RevenuePage'));
+const ReservationOperationsPage = lazy(() => import('./components/ReservationOperationsPage'));
 
 // Loading component for Suspense
 const LoadingFallback = () => (
@@ -179,6 +180,11 @@ const App = () => {
       <Route path="/revenue" element={
         <ProtectedRoute>
           <RevenuePage key="revenue" />
+        </ProtectedRoute>
+      } />
+      <Route path="/operations" element={
+        <ProtectedRoute>
+          <ReservationOperationsPage key="operations" />
         </ProtectedRoute>
       } />
       <Route path="/profile" element={

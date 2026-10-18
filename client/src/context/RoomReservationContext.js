@@ -4,9 +4,14 @@ import supabase from '../supabaseClient';
 import {
   getReservations,
   createReservation as createReservationService,
-  updateReservation as updateReservationService,
-  deleteReservation as deleteReservationService
+  updateReservation as updateReservationService
 } from '../services/reservationService';
+import {
+  validateRoomAvailability,
+  markReservationNoShow,
+  reassignReservation,
+  cancelReservationWithPolicy
+} from '../services/operationsService';
 
 const RoomReservationContext = createContext();
 
@@ -386,6 +391,20 @@ export const RoomReservationProvider = ({ children }) => {
       console.log('Creating reservation with details:', reservationDetails);
       console.log('Room ID:', roomId);
 
+      const selectedRoom = state.rooms.find(room => String(room.id) === String(roomId));
+      if (!selectedRoom) {
+        return { success: false, error: 'Selected room could not be found.' };
+      }
+
+      const availability = await validateRoomAvailability(
+        roomId,
+        reservationDetails.checkInDate,
+        reservationDetails.checkOutDate
+      );
+      if (availability.error) {
+        return { success: false, error: availability.error.message };
+      }
+
       // Update local state for room status
       dispatch({
         type: 'UPDATE_ROOM_STATUS',
@@ -395,6 +414,8 @@ export const RoomReservationProvider = ({ children }) => {
       // Prepare reservation data with consistent field names for database
       const reservationData = {
         room_id: roomId,
+        room_number: selectedRoom.room_number,
+        room_type: selectedRoom.type,
         guest_name: reservationDetails.guestName || '',
         guest_email: reservationDetails.email || '',
         guest_phone: reservationDetails.phoneNumber || '',
@@ -406,7 +427,7 @@ export const RoomReservationProvider = ({ children }) => {
         payment_status: 'Pending',
         adults: reservationDetails.adults || 1,
         children: reservationDetails.children || 0,
-        room_price: state.rooms.find(r => r.id === roomId)?.price || 0,
+        room_price: reservationDetails.roomPrice || selectedRoom.price || 0,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -456,7 +477,7 @@ export const RoomReservationProvider = ({ children }) => {
   };
 
   // Cancel a reservation
-  const cancelReservation = async (reservationId) => {
+  const cancelReservation = async (reservationId, reason = 'Cancelled by staff', fee = 0) => {
     try {
       // Find the reservation
       const reservation = state.reservations.find(r => r.id === reservationId);
@@ -469,24 +490,8 @@ export const RoomReservationProvider = ({ children }) => {
 
       const roomNumber = reservation.room_id;
 
-      // Update room status in database
-      const roomUpdateResult = await supabase
-        .from('rooms')
-        .update({ status: 'Available', updated_at: new Date().toISOString() })
-        .eq('id', roomNumber);
-
-      if (roomUpdateResult.error) {
-        console.error('Error updating room status:', roomUpdateResult.error);
-        throw roomUpdateResult.error;
-      }
-
-      // Delete the reservation from database
-      const { error } = await deleteReservationService(reservationId);
-
-      if (error) {
-        console.error('Error deleting reservation:', error);
-        throw error;
-      }
+      const { error } = await cancelReservationWithPolicy(reservation, reason, fee);
+      if (error) throw error;
 
       // Update local state after successful database operations
       dispatch({
@@ -494,7 +499,16 @@ export const RoomReservationProvider = ({ children }) => {
         payload: { roomId: roomNumber, status: 'Available' }
       });
 
-      dispatch({ type: 'DELETE_RESERVATION', payload: reservationId });
+      dispatch({
+        type: 'UPDATE_RESERVATION',
+        payload: {
+          ...reservation,
+          status: 'Cancelled',
+          cancellation_reason: reason,
+          cancellation_fee: fee,
+          cancelled_at: new Date().toISOString()
+        }
+      });
 
       return { success: true };
     } catch (error) {
@@ -504,6 +518,25 @@ export const RoomReservationProvider = ({ children }) => {
         error: formatError(error) || 'Unknown error occurred'
       };
     }
+  };
+
+  // Mark a reservation as a no-show and release its room.
+  const markNoShow = async (reservation) => {
+    const result = await markReservationNoShow(reservation);
+    if (result.error) return { success: false, error: result.error.message };
+    dispatch({ type: 'UPDATE_RESERVATION', payload: result.data });
+    dispatch({ type: 'UPDATE_ROOM_STATUS', payload: { roomId: reservation.room_id, status: 'Available' } });
+    return { success: true, data: result.data };
+  };
+
+  // Reassign a reservation to a different room after rechecking date overlap.
+  const reassignRoom = async (reservation, room) => {
+    const result = await reassignReservation(reservation, room);
+    if (result.error) return { success: false, error: result.error.message };
+    dispatch({ type: 'UPDATE_RESERVATION', payload: result.data });
+    dispatch({ type: 'UPDATE_ROOM_STATUS', payload: { roomId: reservation.room_id, status: 'Available' } });
+    dispatch({ type: 'UPDATE_ROOM_STATUS', payload: { roomId: room.id, status: 'Reserved' } });
+    return { success: true, data: result.data };
   };
 
   // Update a reservation
@@ -769,6 +802,8 @@ export const RoomReservationProvider = ({ children }) => {
     getReservationsForRoom,
     getActiveReservationForRoom,
     updateRevenueStats,
+    markNoShow,
+    reassignRoom,
     testDatabaseConnection
   }), [
     state.rooms,
@@ -787,6 +822,8 @@ export const RoomReservationProvider = ({ children }) => {
     getReservationById,
     getReservationsForRoom,
     getActiveReservationForRoom,
+    markNoShow,
+    reassignRoom,
     getReservations,
     updateRoomStatus,
     updateRevenueStats
