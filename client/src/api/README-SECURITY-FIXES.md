@@ -7,7 +7,7 @@ The Supabase database linter has identified several security issues in our datab
 ### 1. Exposed Auth Users
 
 Two views are exposing sensitive user authentication data to anonymous users:
-- `public.staff_credentials_debug`
+- `public.staff_credentials_debug` (removed together with `staff_credentials`)
 - `public.auth_debug`
 
 These views are problematic because they expose data from the `auth.users` table, which should never be accessible to unauthenticated users or regular authenticated users.
@@ -15,7 +15,7 @@ These views are problematic because they expose data from the `auth.users` table
 ### 2. Security Definer Views
 
 The following views are using SECURITY DEFINER, which means they execute with the permissions of the view creator rather than the user querying the view:
-- `public.staff_credentials_debug`
+- `public.staff_credentials_debug` (removed together with `staff_credentials`)
 - `public.auth_debug`
 - `public.staff_trainings_view`
 - `public.time_entries_view`

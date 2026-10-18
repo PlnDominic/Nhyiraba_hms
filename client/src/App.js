@@ -38,6 +38,7 @@ const RequestAccessPage = lazy(() => import('./pages/RequestAccessPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage'));
 const NotFound = lazy(() => import('./components/NotFound'));
 const RealAccountSetup = lazy(() => import('./components/RealAccountSetup'));
 const StaffPage = lazy(() => import('./components/StaffPage'));
@@ -287,6 +288,11 @@ const App = () => {
         <ForgotPasswordPage key="forgot-password" />
       } />
 
+      <Route path="/change-password" element={
+        <ProtectedRoute>
+          <ChangePasswordPage key="change-password" />
+        </ProtectedRoute>
+      } />
       <Route path="/reset-password" element={
         <ResetPasswordPage key="reset-password" />
       } />

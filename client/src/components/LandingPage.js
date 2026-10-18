@@ -1,36 +1,8 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useUser } from '../context/UserContext';
+import React from 'react';
+import { Link } from 'react-router-dom';
 
 
 function LandingPage() {
-  const { setCurrentUser } = useUser();
-  const navigate = useNavigate();
-  const [showLoginOptions, setShowLoginOptions] = useState(false);
-
-  // Function to login as admin or manager
-  const handleLogin = (role) => {
-    setCurrentUser({
-      id: `demo-${role}-id`,
-      email: `${role}@example.com`,
-      role: role,
-      fullName: `${role.charAt(0).toUpperCase() + role.slice(1)} User`,
-      position: role === 'admin' ? 'Administrator' : 'Hotel Manager',
-      department: 'Management',
-      contactNumber: '123-456-7890',
-      avatar_url: null
-    });
-
-    // Redirect to the appropriate page
-    if (role === 'admin') {
-      navigate('/admin/access-control');
-    } else if (role === 'manager') {
-      navigate('/manager/access-control');
-    } else {
-      navigate('/dashboard');
-    }
-  };
-
   return (
     <div 
       className="landing-page relative min-h-screen flex flex-col"

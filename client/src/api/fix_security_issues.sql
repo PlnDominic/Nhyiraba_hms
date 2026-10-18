@@ -6,25 +6,10 @@
 -- 1. Drop the problematic debug views that expose auth.users data
 DROP VIEW IF EXISTS public.staff_credentials_debug;
 DROP VIEW IF EXISTS public.auth_debug;
+-- (staff_credentials and its views were removed entirely by
+--  supabase/migrations/20261023_remove_plaintext_passwords.sql)
 
--- 2. Create safer alternatives with restricted access
--- Create a safer version of staff_credentials_debug that doesn't expose auth.users
-CREATE OR REPLACE VIEW public.staff_credentials_safe AS
-SELECT 
-  sc.id, 
-  sc.user_id, 
-  sc.email,
-  sc.created_at,
-  up.full_name,
-  up.role
-FROM staff_credentials sc
-LEFT JOIN user_profiles up ON sc.user_id = up.user_id;
-
--- Restrict access to the new view to authenticated users only
-GRANT SELECT ON public.staff_credentials_safe TO authenticated;
-REVOKE SELECT ON public.staff_credentials_safe FROM anon;
-
--- 3. Fix SECURITY DEFINER views
+-- 2. Fix SECURITY DEFINER views
 -- Drop the SECURITY DEFINER views
 DROP VIEW IF EXISTS public.staff_trainings_view;
 DROP VIEW IF EXISTS public.time_entries_view;

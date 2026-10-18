@@ -5,7 +5,6 @@ import { useTheme } from '../context/ThemeContext';
 import supabase from '../supabaseClient';
 import { toast } from 'react-hot-toast';
 // Import debug utilities
-import '../debug_login';
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -89,7 +88,8 @@ const LoginPage = () => {
         department: profileData.department,
         contactNumber: profileData.contact_number,
         permissions: profileData.permissions || [],
-        avatar_url: profileData.avatar_url
+        avatar_url: profileData.avatar_url,
+        passwordChangeRequired: Boolean(profileData.password_change_required)
       });
 
       toast.success('Login successful!');

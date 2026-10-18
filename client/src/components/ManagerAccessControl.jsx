@@ -7,6 +7,7 @@ import { createUserAccount } from '../services/userService';
 import { toast } from 'react-hot-toast';
 import supabase from '../supabaseClient';
 import GridBackground from './GridBackground';
+import { generateTempPassword, validatePassword } from '../utils/passwordPolicy';
 
 const ManagerAccessControl = () => {
   const { user } = useUser();
@@ -297,11 +298,7 @@ const ManagerAccessControl = () => {
 
   // Generate a random password
   const generatePassword = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()';
-    let password = '';
-    for (let i = 0; i < 12; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
+    const password = generateTempPassword(); // crypto-random, always meets the password policy
     setFormData(prevData => ({
       ...prevData,
       password,
@@ -334,11 +331,12 @@ const ManagerAccessControl = () => {
       return false;
     }
     
-    if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters long');
+    const problems = validatePassword(formData.password, { email: formData.email });
+    if (problems.length) {
+      setError(`Password too weak. ${problems.join(' ')}`);
       return false;
     }
-    
+
     return true;
   };
 

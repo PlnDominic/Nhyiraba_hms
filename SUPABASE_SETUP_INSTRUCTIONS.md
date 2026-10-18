@@ -79,7 +79,6 @@ This guide will help you set up all the necessary database tables for the Lavima
      - staff
      - staff_schedules
      - time_entries
-     - staff_credentials
      - training_modules
      - staff_trainings
      - performance_metrics
@@ -144,7 +143,6 @@ supabase db push
 - **staff**: Staff member information (5 sample staff pre-populated)
 - **staff_schedules**: Staff work schedules and shifts
 - **time_entries**: Clock in/out records
-- **staff_credentials**: Secure staff login credentials
 - **training_modules**: Training courses and materials
 - **staff_trainings**: Staff training enrollment and completion
 - **performance_metrics**: Staff performance reviews

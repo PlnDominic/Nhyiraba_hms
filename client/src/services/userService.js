@@ -147,6 +147,7 @@ export const createUserAccount = async (userData) => {
           position: userData.position,
           department: userData.department,
           contact_number: userData.contactNumber,
+          password_change_required: true,
           email: userData.email // Store email in profile for easier queries
         }
       ])
@@ -172,24 +173,11 @@ export const createUserAccount = async (userData) => {
 
     console.log('User profile created successfully');
 
-    // Step 3: Store the credentials for later retrieval
-    console.log('Step 3: Storing staff credentials');
-    const { data: credData, error: credError } = await supabase
-      .rpc('store_staff_credentials', {
-        p_user_id: authData.user.id,
-        p_email: userData.email,
-        p_password: userData.password
-      });
+    // Passwords are never stored by the app. The temporary password is emailed once and
+    // the user must replace it at first sign-in (password_change_required).
 
-    if (credError) {
-      console.warn("Warning: Could not store staff credentials:", credError);
-      // Don't throw here - we want to continue even if this fails
-    } else {
-      console.log("Staff credentials stored successfully");
-    }
-
-    // Step 4: Save explicit permissions to user_permissions table
-    console.log('Step 4: Saving explicit user permissions');
+    // Step 3: Save explicit permissions to user_permissions table
+    console.log('Step 3: Saving explicit user permissions');
     if (userData.permissions && userData.permissions.length > 0) {
       try {
         // First, get permission IDs from permission names
@@ -516,94 +504,3 @@ export const deleteUserAccount = async (userId) => {
     };
   }
 };
-
-/**
- * Get user credentials (for staff login)
- * Only accessible by the user themselves or admins
- * @param {string} userId - Optional, if admin wants to see credentials for a specific user
- * @returns {Promise<Object>} - The credentials or error
- */
-export const getUserCredentials = async (userId = null) => {
-  try {
-    // Get the authenticated user's ID if no userId provided
-    if (!userId) {
-      const { data: authData } = await supabase.auth.getSession();
-      if (!authData.session) {
-        throw new Error('Not authenticated');
-      }
-      userId = authData.session.user.id;
-    }
-
-    const { data, error } = await supabase
-      .from('staff_credentials')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (error) throw error;
-
-    return {
-      success: true,
-      data
-    };
-  } catch (error) {
-    console.error('Error getting user credentials:', error);
-    return {
-      success: false,
-      error: error.message || 'Failed to get user credentials'
-    };
-  }
-};
-
-/**
- * Get a user's profile and permissions in one call.
- * @param {string} userId - The user ID.
- * @returns {Promise<Object>} - { success: true, data: { profile, permissions } } or error object.
- */
-export const getUserDetails = async (userId) => {
-  try {
-    // Fetch profile
-    const { data: profileData, error: profileError } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (profileError) throw profileError;
-
-    // Fetch permissions
-    const { data: permData, error: permError } = await supabase
-      .from('user_permissions')
-      .select('permission_id')
-      .eq('user_id', userId);
-
-    if (permError) throw permError;
-
-    // Fetch permission names
-    let permissions = [];
-    if (permData && permData.length > 0) {
-      const permIds = permData.map(p => p.permission_id);
-      const { data: permNames, error: nameError } = await supabase
-        .from('permissions')
-        .select('name')
-        .in('id', permIds);
-
-      if (nameError) throw nameError;
-      permissions = permNames.map(p => p.name);
-    }
-
-    return {
-      success: true,
-      data: {
-        profile: profileData,
-        permissions
-      }
-    };
-  } catch (error) {
-    console.error('Error fetching user details:', error);
-    return {
-      success: false,
-      error: error.message || 'Failed to fetch user details'
-    };
-  }
-}; 

@@ -25,6 +25,7 @@ import { createUserAccount, getAllUsers, updateUser } from '../services/userServ
 import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import supabase from '../supabaseClient';
+import { generateTempPassword, validatePassword } from '../utils/passwordPolicy';
 
 const AdminAccessControl = () => {
   const { user } = useUser();
@@ -496,8 +497,9 @@ const AdminAccessControl = () => {
       return false;
     }
 
-    if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters long');
+    const problems = validatePassword(formData.password, { email: formData.email });
+    if (problems.length) {
+      setError(`Password too weak. ${problems.join(' ')}`);
       return false;
     }
 
@@ -690,6 +692,17 @@ const AdminAccessControl = () => {
                   </div>
 
                   {/* Password Fields */}
+                  <div className="flex items-center justify-between rounded-lg bg-blue-50 px-4 py-2 text-sm text-blue-900 dark:bg-blue-900/20 dark:text-blue-100">
+                    <span>The staff member must choose their own password at first sign-in. Nothing is stored by the system.</span>
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() => { const generated = generateTempPassword(); setFormData(prev => ({ ...prev, password: generated, confirmPassword: generated })); setShowPassword(true); setShowConfirmPassword(true); }}
+                      className="ml-4 whitespace-nowrap rounded-md bg-blue-600 px-3 py-1.5 font-semibold text-white hover:bg-blue-700"
+                    >
+                      Generate secure password
+                    </button>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="password" className="block text-sm font-medium mb-2">
