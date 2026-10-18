@@ -8,6 +8,7 @@ const { sendApprovalEmail, testEmailConfig } = require('./server/emailService');
 
 // SMS service (Arkesel)
 const { handleSend, handleStatus, handleBulkSend, handleCampaigns } = require('./server/smsHandlers');
+const { handleSetPassword, handleDeleteUser } = require('./server/adminUserHandlers');
 
 // Server-side authorization (role is read from user_profiles, never from the client)
 const { requireAuth, isManager, ADMIN_ROLES } = require('./server/auth');
@@ -253,6 +254,28 @@ app.get('/api/test-email', requireAuth(ADMIN_ROLES), async (req, res) => {
             success: false,
             error: error.message
         });
+    }
+});
+
+// ==================== ADMIN STAFF ACCOUNT ENDPOINTS ====================
+
+app.post('/api/admin/users/password', async (req, res) => {
+    try {
+        const { status, body } = await handleSetPassword(req.headers.authorization, req.body);
+        res.status(status).json(body);
+    } catch (error) {
+        console.error('Error in /api/admin/users/password:', error);
+        res.status(500).json({ success: false, error: 'Request failed' });
+    }
+});
+
+app.post('/api/admin/users/delete', async (req, res) => {
+    try {
+        const { status, body } = await handleDeleteUser(req.headers.authorization, req.body);
+        res.status(status).json(body);
+    } catch (error) {
+        console.error('Error in /api/admin/users/delete:', error);
+        res.status(500).json({ success: false, error: 'Request failed' });
     }
 });
 

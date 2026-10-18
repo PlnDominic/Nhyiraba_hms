@@ -17,11 +17,14 @@ import {
   faSave,
   faXmark,
   faEye,
-  faEyeSlash
+  faEyeSlash,
+  faKey,
+  faTrash,
+  faCopy
 } from '@fortawesome/free-solid-svg-icons';
 import DashboardLayout from './DashboardLayout';
 import { getPendingAccessRequests } from '../api/accessRequestService';
-import { createUserAccount, getAllUsers, updateUser } from '../services/userService';
+import { createUserAccount, getAllUsers, updateUser, deleteUserAccount, setUserPassword } from '../services/userService';
 import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import supabase from '../supabaseClient';
@@ -71,6 +74,16 @@ const AdminAccessControl = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editError, setEditError] = useState('');
   const [editSuccess, setEditSuccess] = useState('');
+
+  // Admin actions on a staff account: set/reset password, delete
+  const [passwordTarget, setPasswordTarget] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordResult, setPasswordResult] = useState(null); // { temporaryPassword }
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   // Password visibility states
   const [showPassword, setShowPassword] = useState(false);
@@ -466,6 +479,57 @@ const AdminAccessControl = () => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const openPasswordDialog = (userItem) => {
+    setPasswordTarget(userItem);
+    setNewPassword('');
+    setPasswordResult(null);
+    setPasswordError('');
+  };
+
+  const closePasswordDialog = () => {
+    setPasswordTarget(null);
+    setNewPassword('');
+    setPasswordResult(null);
+    setPasswordError('');
+  };
+
+  // Empty `chosen` = generate a temporary password (reset)
+  const submitPassword = async (chosen) => {
+    if (!passwordTarget) return;
+    setPasswordError('');
+    if (chosen) {
+      const problems = validatePassword(chosen, { email: passwordTarget.email });
+      if (problems.length) {
+        setPasswordError(`Password too weak. ${problems.join(' ')}`);
+        return;
+      }
+    }
+    setPasswordBusy(true);
+    const result = await setUserPassword(passwordTarget.user_id, chosen || undefined);
+    setPasswordBusy(false);
+    if (!result.success) {
+      setPasswordError(result.error || 'Could not update the password');
+      return;
+    }
+    setPasswordResult({ temporaryPassword: result.temporaryPassword || chosen });
+    setNewPassword('');
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteBusy(true);
+    setDeleteError('');
+    const result = await deleteUserAccount(deleteTarget.user_id);
+    setDeleteBusy(false);
+    if (!result.success) {
+      setDeleteError(result.error || 'Could not delete this account');
+      return;
+    }
+    setSuccess(`${deleteTarget.full_name || deleteTarget.email} was deleted.`);
+    setDeleteTarget(null);
+    await fetchData();
   };
 
   // Handle cancel edit
@@ -964,10 +1028,98 @@ const AdminAccessControl = () => {
                         </div>
                       )}
                     </div>
+
+                    <div className="mt-4 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openPasswordDialog(userItem)}
+                        className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-amber-500 hover:bg-amber-600 text-white"
+                      >
+                        <FontAwesomeIcon icon={faKey} /> Password
+                      </button>
+                      {userItem.user_id !== user?.id && (
+                        <button
+                          type="button"
+                          onClick={() => { setDeleteTarget(userItem); setDeleteError(''); }}
+                          className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-red-500 hover:bg-red-600 text-white"
+                          title="Delete user"
+                        >
+                          <FontAwesomeIcon icon={faTrash} /> Delete
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Set / reset password */}
+        {passwordTarget && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Password">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full p-6">
+              <h2 className="text-lg font-semibold mb-1">Password for {passwordTarget.full_name || passwordTarget.email}</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">They will be asked to choose a new password the next time they sign in.</p>
+
+              {passwordResult ? (
+                <div>
+                  <div className="p-4 mb-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
+                    Password updated. Share it with {passwordTarget.full_name || 'the staff member'} privately. It will not be shown again.
+                  </div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <code className="flex-1 px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 font-mono text-sm break-all select-all">{passwordResult.temporaryPassword}</code>
+                    <button type="button" className="p-2 rounded-lg bg-blue-500 text-white" title="Copy" onClick={() => navigator.clipboard?.writeText(passwordResult.temporaryPassword)}>
+                      <FontAwesomeIcon icon={faCopy} />
+                    </button>
+                  </div>
+                  <button type="button" onClick={closePasswordDialog} className="w-full px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 font-medium">Done</button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {passwordError && <div role="alert" className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">{passwordError}</div>}
+                  <div>
+                    <label htmlFor="adminNewPassword" className="block text-sm font-medium mb-2">Set a specific password</label>
+                    <input
+                      id="adminNewPassword"
+                      type="text"
+                      autoComplete="off"
+                      value={newPassword}
+                      onChange={(e) => { setNewPassword(e.target.value); setPasswordError(''); }}
+                      placeholder="At least 10 characters, upper and lower case, a number"
+                      className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                    />
+                    <button type="button" disabled={passwordBusy || !newPassword} onClick={() => submitPassword(newPassword)} className="mt-2 w-full px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium disabled:opacity-50">
+                      {passwordBusy ? 'Saving…' : 'Save password'}
+                    </button>
+                  </div>
+                  <div className="text-center text-xs text-gray-400">or</div>
+                  <button type="button" disabled={passwordBusy} onClick={() => submitPassword('')} className="w-full px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-medium disabled:opacity-50">
+                    {passwordBusy ? 'Working…' : 'Reset: generate a temporary password'}
+                  </button>
+                  <button type="button" onClick={closePasswordDialog} className="w-full px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 font-medium">Cancel</button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Delete confirmation */}
+        {deleteTarget && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Delete user">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full p-6">
+              <h2 className="text-lg font-semibold mb-2 text-red-600">Delete {deleteTarget.full_name || deleteTarget.email}?</h2>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                This removes their account and sign-in permanently. They will no longer be able to log in. This cannot be undone.
+              </p>
+              {deleteError && <div role="alert" className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">{deleteError}</div>}
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setDeleteTarget(null)} disabled={deleteBusy} className="flex-1 px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 font-medium">Cancel</button>
+                <button type="button" onClick={confirmDelete} disabled={deleteBusy} className="flex-1 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium disabled:opacity-50">
+                  {deleteBusy ? 'Deleting…' : 'Delete permanently'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

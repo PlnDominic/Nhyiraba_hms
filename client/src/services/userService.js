@@ -1,4 +1,5 @@
 import supabase from '../supabaseClient';
+import { API_BASE_URL } from '../offline/config';
 
 /**
  * Check if a user with the given email already exists
@@ -478,29 +479,34 @@ export const updateUser = async (userId, profileData, permissions = null) => {
   }
 };
 
-/**
- * Delete a user account
- * @param {string} userId - The user ID to delete
- * @returns {Promise<Object>} - Success status or error
- */
-export const deleteUserAccount = async (userId) => {
+// Admin-only account actions run on the server (they need the Supabase service key)
+const callAdminApi = async (path, payload) => {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  if (!token) return { success: false, error: 'Not authenticated' };
   try {
-    // First mark the user profile as inactive instead of trying to delete auth user
-    const { error: updateError } = await supabase
-      .from('user_profiles')
-      .update({ active: false })
-      .eq('user_id', userId);
-
-    if (updateError) throw updateError;
-
-    return {
-      success: true
-    };
+    const response = await fetch(`${API_BASE_URL}/admin/users/${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) return { success: false, error: result.error || `Request failed (HTTP ${response.status})` };
+    return result;
   } catch (error) {
-    console.error('Error deactivating user account:', error);
-    return {
-      success: false,
-      error: error.message || 'Failed to deactivate user account'
-    };
+    return { success: false, error: error.name === 'TypeError' ? "You're offline. Account changes need a connection." : error.message };
   }
 };
+
+/**
+ * Delete a staff account (profile, permissions and sign-in). Administrators only.
+ * @param {string} userId - The user ID to delete
+ */
+export const deleteUserAccount = (userId) => callAdminApi('delete', { userId });
+
+/**
+ * Set a staff member's password, or reset it when `password` is omitted (a temporary
+ * password is generated and returned once as `temporaryPassword`). The staff member must
+ * choose a new password at next sign-in. Administrators only.
+ */
+export const setUserPassword = (userId, password) => callAdminApi('password', { userId, ...(password ? { password } : {}) });
