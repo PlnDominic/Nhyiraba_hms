@@ -7,7 +7,7 @@ require('dotenv').config();
 const { sendApprovalEmail, testEmailConfig } = require('./server/emailService');
 
 // SMS service (Arkesel)
-const { sendSms, buildMessage } = require('./server/smsService');
+const { handleSend, handleStatus } = require('./server/smsHandlers');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -251,35 +251,22 @@ app.get('/api/test-email', async (req, res) => {
 // POST endpoint to send a templated SMS (requires a valid Supabase session token)
 app.post('/api/sms/send', async (req, res) => {
     try {
-        const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-        if (!token) {
-            return res.status(401).json({ success: false, error: 'Authentication required' });
-        }
-        const { data: authData, error: authError } = await supabase.auth.getUser(token);
-        if (authError || !authData?.user) {
-            return res.status(401).json({ success: false, error: 'Invalid session' });
-        }
-
-        const { event, phone, data } = req.body;
-        const message = buildMessage(event, data);
-        if (!phone || !message) {
-            return res.status(400).json({
-                success: false,
-                error: 'Missing or invalid fields: event, phone'
-            });
-        }
-
-        const result = await sendSms({ phone, message });
-        if (result.skipped) {
-            return res.json({ success: true, skipped: true, message: 'SMS service not configured' });
-        }
-        if (!result.success) {
-            return res.status(502).json({ success: false, error: result.error });
-        }
-        res.json({ success: true });
+        const { status, body } = await handleSend(req.headers.authorization, req.body);
+        res.status(status).json(body);
     } catch (error) {
         console.error('Error in /api/sms/send:', error);
         res.status(500).json({ success: false, error: 'Failed to send SMS' });
+    }
+});
+
+// GET recent SMS with refreshed delivery status
+app.get('/api/sms/status', async (req, res) => {
+    try {
+        const { status, body } = await handleStatus(req.headers.authorization, req.query);
+        res.status(status).json(body);
+    } catch (error) {
+        console.error('Error in /api/sms/status:', error);
+        res.status(500).json({ success: false, error: 'Failed to load SMS status' });
     }
 });
 

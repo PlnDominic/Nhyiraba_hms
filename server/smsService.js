@@ -73,11 +73,44 @@ const sendSms = async ({ phone, message }) => {
     if (!response.ok || (body.status && body.status !== 'success')) {
       return { success: false, error: body.message || `Arkesel error (HTTP ${response.status})` };
     }
-    return { success: true, data: body.data };
+    const first = Array.isArray(body.data) ? body.data[0] : body.data;
+    return {
+      success: true,
+      data: body.data,
+      recipient,
+      messageId: first?.id || null,
+    };
   } catch (error) {
     console.error('Arkesel SMS error:', error);
     return { success: false, error: error.message };
   }
 };
 
-module.exports = { sendSms, buildMessage, normalizePhone, templates };
+/**
+ * Look up the delivery status of a message by Arkesel message ID.
+ * Returns { success, status?, raw?, error? }. Status is upper-cased
+ * (DELIVERED, SUBMITTED, PENDING, QUEUED, NOT_DELIVERED, REJECTD, ...).
+ */
+const getSmsStatus = async (messageId) => {
+  const apiKey = process.env.ARKESEL_API_KEY;
+  if (!apiKey || !messageId) return { success: false, error: 'Missing API key or message id' };
+  try {
+    const base = (process.env.ARKESEL_API_URL || DEFAULT_API_URL).replace(/\/send\/?$/, '');
+    const response = await fetch(`${base}/${encodeURIComponent(messageId)}`, {
+      headers: { 'api-key': apiKey },
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return { success: false, error: body.message || `HTTP ${response.status}`, raw: body };
+    }
+    const d = Array.isArray(body.data) ? body.data[0] : body.data || body;
+    const status = d?.status || d?.delivery_status || d?.state;
+    return status
+      ? { success: true, status: String(status).toUpperCase(), raw: body }
+      : { success: false, error: 'Status not found in response', raw: body };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+};
+
+module.exports = { sendSms, getSmsStatus, buildMessage, normalizePhone, templates };
