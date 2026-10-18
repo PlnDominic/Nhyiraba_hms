@@ -3,6 +3,8 @@ import Modal from 'react-modal';
 import { useTheme } from '../context/ThemeContext';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
+import '../styles/AppleModal.css';
+import { Group, Row, Counter, CloseIcon } from './ui/AppleForm';
 import { useRoomReservation } from '../context/RoomReservationContext';
 
 const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
@@ -132,31 +134,6 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
       });
   };
 
-  // Custom styles for react-modal
-  const customStyles = {
-    content: {
-      top: '50%',
-      left: '50%',
-      right: 'auto',
-      bottom: 'auto',
-      marginRight: '-50%',
-      transform: 'translate(-50%, -50%)',
-      maxWidth: '650px',
-      width: '100%',
-      maxHeight: '90vh',
-      overflow: 'auto',
-      padding: 0,
-      border: 'none',
-      borderRadius: '0.5rem',
-      backgroundColor: isDarkMode ? '#1F2937' : '#FFFFFF',
-      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)'
-    },
-    overlay: {
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      zIndex: 1000
-    }
-  };
-
   // When modal is closed, reset form
   const handleModalClose = () => {
     setFormData({
@@ -176,250 +153,104 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
     onRequestClose();
   };
 
+  const mode = isDarkMode ? 'dark' : 'light';
+  const dp = isDarkMode ? 'apple-datepicker-dark' : undefined;
+  const setCount = (name) => (value) => setFormData(prev => ({ ...prev, [name]: value }));
+  const availableRooms = rooms.filter(room => room.status === 'Available').sort((a, b) => a.id - b.id);
+
   if (!isOpen) return null;
 
   return (
     <Modal
       isOpen={isOpen}
       onRequestClose={handleModalClose}
-      style={customStyles}
       contentLabel="New Reservation"
+      closeTimeoutMS={250}
+      overlayClassName="apple-overlay"
+      className={`apple-ui apple-sheet apple-sheet--${mode}`}
+      style={{ content: { maxWidth: 520 } }}
     >
-      <div className={`${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'}`}>
-        {/* Header */}
-        <div className={`flex justify-between items-center p-4 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-          <h2 className="text-xl font-semibold">New Reservation</h2>
-          <button
-            onClick={handleModalClose}
-            className={`${isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-800'} text-xl font-bold`}
-            aria-label="Close"
-          >
-            ×
-          </button>
+      <div className="flex items-center justify-between px-5 pt-5 pb-3">
+        <button type="button" className="apple-btn apple-btn--plain" style={{ height: 30, minWidth: 60, textAlign: 'left', padding: 0 }} onClick={handleModalClose}>Cancel</button>
+        <h2 className="text-[17px] font-semibold">New Reservation</h2>
+        <div style={{ minWidth: 60, textAlign: 'right' }}>
+          <button type="button" className="apple-close" onClick={handleModalClose} aria-label="Close"><CloseIcon /></button>
+        </div>
+      </div>
+
+      <form id="new-reservation-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 pt-2 pb-4 space-y-6" style={{ overflowX: 'hidden' }}>
+        <div>
+          <p className="apple-section-title">Guest</p>
+          <Group mode={mode}>
+            <Row label="Full name" error={errors.guestName}>
+              <input className="apple-field" type="text" name="guestName" value={formData.guestName} onChange={handleChange} placeholder="Required" autoComplete="off" autoFocus />
+            </Row>
+            <Row label="Email" error={errors.email}>
+              <input className="apple-field" type="email" name="email" value={formData.email} onChange={handleChange} placeholder="Required" autoComplete="off" />
+            </Row>
+            <Row label="Phone">
+              <input className="apple-field" type="tel" name="phoneNumber" value={formData.phoneNumber} onChange={handleChange} placeholder="Optional" autoComplete="off" />
+            </Row>
+            <Row label="Adults">
+              <span style={{ marginLeft: 'auto', opacity: 0.6 }}>{formData.adults}</span>
+              <Counter name="adults" value={formData.adults} min={1} max={5} onChange={setCount('adults')} />
+            </Row>
+            <Row label="Children">
+              <span style={{ marginLeft: 'auto', opacity: 0.6 }}>{formData.children}</span>
+              <Counter name="children" value={formData.children} min={0} max={4} onChange={setCount('children')} />
+            </Row>
+          </Group>
+          {errors.guestName && <p className="apple-error">{errors.guestName}</p>}
+          {errors.email && <p className="apple-error">{errors.email}</p>}
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6">
-          {/* Guest Information Section */}
-          <div className="mb-6">
-            <h3 className={`text-lg font-medium mb-4 ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
-              Guest Information
-            </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Guest Name*
-                </label>
-                <input
-                  type="text"
-                  name="guestName"
-                  value={formData.guestName}
-                  onChange={handleChange}
-                  className={`w-full p-2 rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                  placeholder="Enter full name"
-                />
-                {errors.guestName && <p className="mt-1 text-sm text-red-500">{errors.guestName}</p>}
-              </div>
-              
-              <div>
-                <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Email Address*
-                </label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className={`w-full p-2 rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                  placeholder="email@example.com"
-                />
-                {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
-              </div>
-              
-              <div>
-                <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Phone Number (optional)
-                </label>
-                <input
-                  type="tel"
-                  name="phoneNumber"
-                  value={formData.phoneNumber}
-                  onChange={handleChange}
-                  className={`w-full p-2 rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                  placeholder="+1 (555) 123-4567"
-                />
-                {errors.phoneNumber && <p className="mt-1 text-sm text-red-500">{errors.phoneNumber}</p>}
-              </div>
-              
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    Adults
-                  </label>
-                  <select
-                    name="adults"
-                    value={formData.adults}
-                    onChange={handleChange}
-                    className={`w-full p-2 rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                  >
-                    {[1, 2, 3, 4, 5].map(num => (
-                      <option key={num} value={num}>{num}</option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div>
-                  <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    Children
-                  </label>
-                  <select
-                    name="children"
-                    value={formData.children}
-                    onChange={handleChange}
-                    className={`w-full p-2 rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                  >
-                    {[0, 1, 2, 3, 4].map(num => (
-                      <option key={num} value={num}>{num}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Reservation Details Section */}
-          <div className="mb-6">
-            <h3 className={`text-lg font-medium mb-4 ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
-              Reservation Details
-            </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Room Type
-                </label>
-                <select
-                  name="roomType"
-                  value={formData.roomType}
-                  onChange={handleChange}
-                  className={`w-full p-2 rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                >
-                  <option value="Standard">Standard</option>
-                  <option value="Deluxe">Deluxe</option>
-                  <option value="Suite">Suite</option>
-                  <option value="Executive">Executive</option>
-                  <option value="Presidential">Presidential</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Room Number*
-                </label>
-                <select
-                  name="roomNumber"
-                  value={formData.roomNumber}
-                  onChange={handleChange}
-                  className={`w-full p-2 rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                >
-                  <option value="">Select a room</option>
-                  {rooms
-                    .filter(room => room.status === 'Available')
-                    .sort((a, b) => a.id - b.id)
-                    .map(room => (
-                      <option key={room.id} value={room.id}>
-                        {room.id} - {room.type} ({room.status})
-                      </option>
-                    ))}
-                </select>
-                {errors.roomNumber && <p className="mt-1 text-sm text-red-500">{errors.roomNumber}</p>}
-              </div>
-              
-              <div>
-                <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Check-In Date*
-                </label>
-                <DatePicker
-                  selected={formData.checkInDate}
-                  onChange={(date) => handleDateChange('checkInDate', date)}
-                  className={`w-full p-2 rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                  minDate={new Date()}
-                  dateFormat="MMMM d, yyyy"
-                />
-                {errors.checkInDate && <p className="mt-1 text-sm text-red-500">{errors.checkInDate}</p>}
-              </div>
-              
-              <div>
-                <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Check-Out Date*
-                </label>
-                <DatePicker
-                  selected={formData.checkOutDate}
-                  onChange={(date) => handleDateChange('checkOutDate', date)}
-                  className={`w-full p-2 rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                  minDate={new Date(formData.checkInDate.getTime() + 86400000)} // day after check-in
-                  dateFormat="MMMM d, yyyy"
-                />
-                {errors.checkOutDate && <p className="mt-1 text-sm text-red-500">{errors.checkOutDate}</p>}
-              </div>
-              
-              <div className="md:col-span-2">
-                <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Special Requests
-                </label>
-                <textarea
-                  name="specialRequests"
-                  value={formData.specialRequests}
-                  onChange={handleChange}
-                  rows="3"
-                  className={`w-full p-2 rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                  placeholder="Any special requirements or notes"
-                ></textarea>
-              </div>
-              
-              <div>
-                <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Payment Method
-                </label>
-                <select
-                  name="paymentMethod"
-                  value={formData.paymentMethod}
-                  onChange={handleChange}
-                  className={`w-full p-2 rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                >
-                  <option value="Credit Card">Credit Card</option>
-                  <option value="Debit Card">Debit Card</option>
-                  <option value="Cash">Cash</option>
-                  <option value="Bank Transfer">Bank Transfer</option>
-                  <option value="Mobile Money">Mobile Money</option>
-                </select>
-              </div>
-            </div>
-          </div>
-          
-          {/* Action Buttons */}
-          <div className={`flex justify-end space-x-3 mt-8 pt-4 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-            <button
-              type="button"
-              onClick={handleModalClose}
-              className={`px-4 py-2 rounded-md ${isDarkMode ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'} transition-colors`}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 rounded-md bg-blue-500 hover:bg-blue-600 text-white transition-colors"
-            >
-              Create Reservation
-            </button>
-          </div>
-          {errors.general && (
-            <div className="mt-2 text-sm text-red-500">
-              {errors.general}
-            </div>
-          )}
-        </form>
+        <div>
+          <p className="apple-section-title">Stay</p>
+          <Group mode={mode}>
+            <Row label="Room type">
+              <select className="apple-field" name="roomType" value={formData.roomType} onChange={handleChange}>
+                {['Standard', 'Deluxe', 'Suite', 'Executive', 'Presidential'].map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </Row>
+            <Row label="Room" error={errors.roomNumber}>
+              <select className="apple-field" name="roomNumber" value={formData.roomNumber} onChange={handleChange}>
+                <option value="">Choose…</option>
+                {availableRooms.map(room => <option key={room.id} value={room.id}>{room.id} · {room.type}</option>)}
+              </select>
+            </Row>
+            <Row label="Check-in" error={errors.checkInDate}>
+              <DatePicker selected={formData.checkInDate} onChange={(d) => handleDateChange('checkInDate', d)} className="apple-field" calendarClassName={dp} popperPlacement="bottom-end" minDate={new Date()} dateFormat="EEE, d MMM yyyy" />
+            </Row>
+            <Row label="Check-out" error={errors.checkOutDate}>
+              <DatePicker selected={formData.checkOutDate} onChange={(d) => handleDateChange('checkOutDate', d)} className="apple-field" calendarClassName={dp} popperPlacement="bottom-end" minDate={new Date(formData.checkInDate.getTime() + 86400000)} dateFormat="EEE, d MMM yyyy" />
+            </Row>
+          </Group>
+          {errors.roomNumber && <p className="apple-error">{errors.roomNumber}</p>}
+          {errors.checkInDate && <p className="apple-error">{errors.checkInDate}</p>}
+          {errors.checkOutDate && <p className="apple-error">{errors.checkOutDate}</p>}
+        </div>
+
+        <div>
+          <p className="apple-section-title">Payment & notes</p>
+          <Group mode={mode}>
+            <Row label="Payment">
+              <select className="apple-field" name="paymentMethod" value={formData.paymentMethod} onChange={handleChange}>
+                {['Credit Card', 'Debit Card', 'Cash', 'Bank Transfer', 'Mobile Money'].map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </Row>
+            <Row align="flex-start">
+              <textarea className="apple-field apple-field--area" name="specialRequests" value={formData.specialRequests} onChange={handleChange} rows="3" placeholder="Special requests" />
+            </Row>
+          </Group>
+        </div>
+
+        {errors.general && (
+          <div role="alert" className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(255,59,48,0.12)', color: '#ff3b30' }}>{errors.general}</div>
+        )}
+      </form>
+
+      <div className="px-5 pb-5 pt-2">
+        <button type="submit" form="new-reservation-form" className="apple-btn apple-btn--primary w-full">Create Reservation</button>
       </div>
     </Modal>
   );

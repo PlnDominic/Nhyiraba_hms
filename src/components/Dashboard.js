@@ -14,79 +14,89 @@ import RoomContextMenu from './RoomContextMenu';
 import { useRoomReservation } from '../context/RoomReservationContext';
 import supabase from '../supabaseClient';
 import { format, isToday, parseISO } from 'date-fns';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
+import '../styles/AppleModal.css';
+import { Group, Row, CloseIcon } from './ui/AppleForm';
 
 // Room Check-in Modal Component
 const RoomCheckInModal = ({ isOpen, onClose, onCheckIn, roomId }) => {
   const { theme } = useTheme();
   const isDarkMode = theme === 'dark';
+  const mode = isDarkMode ? 'dark' : 'light';
+  const toDate = (str) => parseISO(str);
+  const toStr = (date) => format(date, 'yyyy-MM-dd');
   const [guestName, setGuestName] = useState('');
   const [checkInDate, setCheckInDate] = useState(new Date().toISOString().split('T')[0]);
-  
-  // Calculate default checkout date (3 days from now)
+
+  // Calculate default checkout date
   const defaultCheckOut = new Date();
   defaultCheckOut.setDate(defaultCheckOut.getDate() + 3);
   const [checkOutDate, setCheckOutDate] = useState(defaultCheckOut.toISOString().split('T')[0]);
-  
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
-  
+
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!guestName.trim()) return;
     onCheckIn(roomId, guestName, checkInDate, checkOutDate);
     onClose();
   };
 
+  const handleCheckInChange = (date) => {
+    if (!date) return;
+    const next = toStr(date);
+    setCheckInDate(next);
+    if (checkOutDate <= next) setCheckOutDate(toStr(new Date(date.getTime() + 86400000)));
+  };
+
+  const nights = Math.max(1, Math.round((toDate(checkOutDate) - toDate(checkInDate)) / 86400000) || 1);
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className={`${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'} rounded-lg p-6 w-full max-w-md`}>
-        <h2 className="text-xl font-semibold mb-4">Check In - Room {roomId}</h2>
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label className="block mb-2 text-sm font-medium">Guest Name</label>
-            <input 
-              type="text" 
-              value={guestName} 
-              onChange={(e) => setGuestName(e.target.value)} 
-              className={`w-full p-2 rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'}`}
-              placeholder="Enter guest name"
-              required
-            />
+    <div className="apple-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className={`apple-ui apple-sheet apple-sheet--${mode}`} style={{ maxWidth: 460 }} role="dialog" aria-modal="true" aria-label={`Check in room ${roomId}`}>
+        <div className="flex items-center justify-between px-5 pt-5 pb-3">
+          <button type="button" className="apple-btn apple-btn--plain" style={{ height: 30, minWidth: 60, textAlign: 'left', padding: 0 }} onClick={onClose}>Cancel</button>
+          <h2 className="text-[17px] font-semibold">Check In · Room {roomId}</h2>
+          <div style={{ minWidth: 60, textAlign: 'right' }}>
+            <button type="button" className="apple-close" onClick={onClose} aria-label="Close"><CloseIcon /></button>
           </div>
-          <div className="mb-4">
-            <label className="block mb-2 text-sm font-medium">Check-in Date</label>
-            <input 
-              type="date" 
-              value={checkInDate} 
-              onChange={(e) => setCheckInDate(e.target.value)} 
-              className={`w-full p-2 rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'}`}
-              required
-            />
+        </div>
+
+        <form id="room-check-in-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 pt-2 pb-4 space-y-6" style={{ overflowX: 'hidden' }}>
+          <div>
+            <p className="apple-section-title">Guest</p>
+            <Group mode={mode}>
+              <Row label="Full name">
+                <input className="apple-field" type="text" value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="Required" autoComplete="off" autoFocus required />
+              </Row>
+            </Group>
           </div>
-          <div className="mb-4">
-            <label className="block mb-2 text-sm font-medium">Check-out Date</label>
-            <input 
-              type="date" 
-              value={checkOutDate} 
-              onChange={(e) => setCheckOutDate(e.target.value)} 
-              className={`w-full p-2 rounded border ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'}`}
-              required
-            />
-          </div>
-          <div className="flex justify-end space-x-2">
-            <button 
-              type="button" 
-              onClick={onClose}
-              className={`px-4 py-2 rounded ${isDarkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'}`}
-            >
-              Cancel
-            </button>
-            <button 
-              type="submit" 
-              className="px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600"
-            >
-              Check In
-            </button>
+
+          <div>
+            <p className="apple-section-title">Stay</p>
+            <Group mode={mode}>
+              <Row label="Check-in">
+                <DatePicker selected={toDate(checkInDate)} onChange={handleCheckInChange} className="apple-field" calendarClassName={isDarkMode ? 'apple-datepicker-dark' : undefined} dateFormat="EEE, d MMM yyyy" popperPlacement="bottom-end" />
+              </Row>
+              <Row label="Check-out">
+                <DatePicker selected={toDate(checkOutDate)} onChange={(date) => date && setCheckOutDate(toStr(date))} className="apple-field" calendarClassName={isDarkMode ? 'apple-datepicker-dark' : undefined} dateFormat="EEE, d MMM yyyy" popperPlacement="bottom-end" minDate={new Date(toDate(checkInDate).getTime() + 86400000)} />
+              </Row>
+            </Group>
+            <p className="apple-footnote">{nights} night{nights !== 1 ? 's' : ''}</p>
           </div>
         </form>
+
+        <div className="px-5 pb-5 pt-2">
+          <button type="submit" form="room-check-in-form" className="apple-btn apple-btn--primary w-full">Check In</button>
+        </div>
       </div>
     </div>
   );
