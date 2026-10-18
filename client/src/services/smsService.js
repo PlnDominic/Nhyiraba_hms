@@ -81,3 +81,33 @@ export const getSmsLog = async (limit = 50) => {
     return { success: false, error: error.message, data: [] };
   }
 };
+
+const authedFetch = async (path, options = {}) => {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  if (!token) return { success: false, error: 'Not authenticated' };
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+    });
+    const result = await response.json().catch(() => ({}));
+    return response.ok ? result : { success: false, error: result.error || `HTTP ${response.status}`, ...result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * Managers only. Send one message to many people.
+ * `campaign` is promotion | programme | announcement | other; {name} in the
+ * message becomes each recipient's first name. recipients: [{ phone, name }]
+ */
+export const sendBulkSms = ({ campaign, name, message, recipients }) =>
+  authedFetch('/sms/bulk', { method: 'POST', body: JSON.stringify({ campaign, name, message, recipients }) });
+
+// Recent bulk campaigns with delivery counts
+export const getSmsCampaigns = async () => {
+  const result = await authedFetch('/sms/campaigns');
+  return { ...result, data: result.data || [] };
+};
