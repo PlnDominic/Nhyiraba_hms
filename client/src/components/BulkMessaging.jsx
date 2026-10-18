@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { sendBulkSms, getSmsCampaigns } from '../services/smsService';
 import {
-  AUDIENCES, CAMPAIGN_TYPES, MAX_BULK_RECIPIENTS, MAX_BULK_LENGTH,
+  AUDIENCES, CAMPAIGN_TYPES, GROUP_PREFIX, MAX_BULK_RECIPIENTS, MAX_BULK_LENGTH,
   buildAudience, parseManualNumbers, smsParts, firstName
 } from '../utils/bulkAudience';
 
@@ -16,7 +16,7 @@ const Field = ({ id, label, children }) => (
 );
 
 // Compose a message for many people (left) and track past campaigns (right).
-const BulkMessaging = ({ profiles, reservations, flash }) => {
+const BulkMessaging = ({ profiles, reservations, contacts = [], flash }) => {
   const [campaign, setCampaign] = useState('promotion');
   const [title, setTitle] = useState('');
   const [audience, setAudience] = useState('all');
@@ -33,9 +33,10 @@ const BulkMessaging = ({ profiles, reservations, flash }) => {
 
   const manualParsed = useMemo(() => parseManualNumbers(manual), [manual]);
   const people = useMemo(
-    () => (audience === 'manual' ? manualParsed.entries : buildAudience(audience, { profiles, reservations })),
-    [audience, manualParsed, profiles, reservations]
+    () => (audience === 'manual' ? manualParsed.entries : buildAudience(audience, { profiles, reservations, contacts })),
+    [audience, manualParsed, profiles, reservations, contacts]
   );
+  const contactGroups = useMemo(() => [...new Set(contacts.map((c) => c.group_name).filter(Boolean))].sort(), [contacts]);
   const selected = useMemo(() => people.filter((p) => !excluded.has(p.key)), [people, excluded]);
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -117,6 +118,7 @@ const BulkMessaging = ({ profiles, reservations, flash }) => {
           <Field id="cb-audience" label="Who should get it?">
             <select id="cb-audience" value={audience} onChange={(e) => changeAudience(e.target.value)} className="cc-select">
               {AUDIENCES.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+              {contactGroups.map((g) => <option key={g} value={`${GROUP_PREFIX}${g}`}>Contact group: {g}</option>)}
             </select>
           </Field>
 
@@ -138,7 +140,7 @@ const BulkMessaging = ({ profiles, reservations, flash }) => {
               )}
             </div>
             {people.length === 0 ? (
-              <p className="cc-recips-empty">{audience === 'manual' ? 'Type or paste numbers above.' : 'Nobody with a phone number is in this group yet.'}</p>
+              <p className="cc-recips-empty">{audience === 'manual' ? 'Type or paste numbers above.' : audience === 'contacts' || audience.startsWith(GROUP_PREFIX) ? 'No saved contacts here yet. Add or import them on the Saved contacts tab.' : 'Nobody with a phone number is in this group yet.'}</p>
             ) : (
               <>
                 {people.length > 8 && <input aria-label="Search recipients" placeholder="Search name or number" value={search} onChange={(e) => setSearch(e.target.value)} className="cc-input cc-input--small" />}

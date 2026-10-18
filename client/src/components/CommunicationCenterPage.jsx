@@ -5,6 +5,8 @@ import { useTheme } from '../context/ThemeContext';
 import { useGuests } from '../context/GuestContext';
 import { useRoomReservation } from '../context/RoomReservationContext';
 import BulkMessaging from './BulkMessaging';
+import SavedContacts from './SavedContacts';
+import { listContacts } from '../services/contactService';
 import { sendStaffSms, getSmsLog } from '../services/smsService';
 import { buildProfiles, normalizePhone } from '../utils/guestIdentity';
 import '../styles/ComposeCard.css';
@@ -36,6 +38,7 @@ const CommunicationCenterPage = () => {
   const { guestList } = useGuests() || {};
   const { reservations } = useRoomReservation() || {};
   const [mode, setMode] = useState('single');
+  const [contacts, setContacts] = useState([]);
   const [searchParams] = useSearchParams();
   const [form, setForm] = useState({
     phone: searchParams.get('phone') || '',
@@ -65,6 +68,12 @@ const CommunicationCenterPage = () => {
     setLoadingLog(false);
   }, []);
   useEffect(() => { loadLog(); }, [loadLog]);
+
+  const loadContacts = useCallback(async () => {
+    const result = await listContacts();
+    setContacts(result.data); // quietly empty until the sms_contacts migration has been run
+  }, []);
+  useEffect(() => { loadContacts(); }, [loadContacts]);
 
   const set = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
 
@@ -119,10 +128,12 @@ const CommunicationCenterPage = () => {
         <div className="cc-tabs" role="tablist" aria-label="Message type">
           <button type="button" role="tab" aria-selected={mode === 'single'} className="cc-tab" onClick={() => setMode('single')}>One guest</button>
           <button type="button" role="tab" aria-selected={mode === 'bulk'} className="cc-tab" onClick={() => setMode('bulk')}>Many people</button>
+          <button type="button" role="tab" aria-selected={mode === 'contacts'} className="cc-tab" onClick={() => setMode('contacts')}>Saved contacts</button>
         </div>
 
         <div className="cc-layout">
-        {mode === 'bulk' ? <BulkMessaging profiles={profiles} reservations={reservations || []} flash={flash} /> : (<>
+        {mode === 'contacts' ? <SavedContacts contacts={contacts} onChanged={loadContacts} flash={flash} />
+          : mode === 'bulk' ? <BulkMessaging profiles={profiles} reservations={reservations || []} contacts={contacts} flash={flash} /> : (<>
         <section className="cc-card" aria-labelledby="cc-title">
           <div className="cc-card-head"><h2 id="cc-title">Send an SMS</h2></div>
           <form onSubmit={send} className="cc-body">

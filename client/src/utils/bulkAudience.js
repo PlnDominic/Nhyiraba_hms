@@ -2,10 +2,11 @@
 import { normalizePhone } from './guestIdentity';
 
 export const AUDIENCES = [
-  { id: 'all', label: 'Everyone (all guests and customers)' },
+  { id: 'all', label: 'Everyone (all guests, customers and saved contacts)' },
   { id: 'inhouse', label: 'Guests staying now' },
   { id: 'upcoming', label: 'Upcoming reservations' },
   { id: 'past', label: 'Past guests' },
+  { id: 'contacts', label: 'Saved contacts (people who are not guests)' },
   { id: 'manual', label: 'Numbers I type or paste' }
 ];
 
@@ -32,7 +33,17 @@ const dedupe = (entries) => {
   return [...seen.values()];
 };
 
-export const buildAudience = (id, { profiles = [], reservations = [] } = {}) => {
+export const GROUP_PREFIX = 'group:';
+
+export const buildAudience = (id, { profiles = [], reservations = [], contacts = [] } = {}) => {
+  // Saved contacts who asked not to be messaged are left out of every audience
+  const optedOut = new Set(contacts.filter((c) => c.opted_out).map((c) => c.phone));
+  const savedContacts = contacts.filter((c) => !c.opted_out).map((c) => ({ name: c.name, phone: c.phone, group: c.group_name }));
+  const people = buildBaseAudience(id, { profiles, reservations, savedContacts });
+  return people.filter((p) => !optedOut.has(p.phone));
+};
+
+const buildBaseAudience = (id, { profiles, reservations, savedContacts }) => {
   const fromProfile = (p) => ({ name: p.name, phone: p.phones[0] });
   const reservationContacts = reservations
     .filter((r) => r.guest_phone)
@@ -50,7 +61,9 @@ export const buildAudience = (id, { profiles = [], reservations = [] } = {}) => 
       .filter((p) => p.phones.length && !p.inHouse && !p.stays.some((s) => status(s.status) === 'reserved'))
       .map(fromProfile));
   }
-  if (id === 'all') return dedupe([...profiles.filter((p) => p.phones.length).map(fromProfile), ...reservationContacts]);
+  if (id === 'all') return dedupe([...profiles.filter((p) => p.phones.length).map(fromProfile), ...reservationContacts, ...savedContacts]);
+  if (id === 'contacts') return dedupe(savedContacts);
+  if (id.startsWith(GROUP_PREFIX)) return dedupe(savedContacts.filter((c) => c.group === id.slice(GROUP_PREFIX.length)));
   return [];
 };
 
