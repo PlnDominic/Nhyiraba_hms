@@ -4,6 +4,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useRoomReservation } from '../context/RoomReservationContext';
 import { StepModal, Step, Field, RoomCards, DateInput, ReviewList } from './ui/StepModal';
 import DuplicateGuestHint from './DuplicateGuestHint';
+import { sendSmsNotification } from '../services/smsService';
 
 const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
     const { theme } = useTheme();
@@ -113,13 +114,21 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
                 };
                 
                 console.log('Submitting guest data:', newGuest);
-                await onAddGuest(newGuest);
+                const result = await onAddGuest(newGuest);
+                if (result?.success === false) return; // not saved: no confirmation, keep the modal open
+                const room = rooms.find(r => String(r.id) === String(guestInfo.room));
+                sendSmsNotification('checked_in', guestInfo.phone, {
+                    guestName: trimmedName,
+                    roomNumber: room?.room_number || guestInfo.room,
+                    checkInDate: guestInfo.checkIn,
+                    checkOutDate: guestInfo.checkOut
+                });
                 onClose(); // Close the modal after adding the guest
             } catch (error) {
                 console.error('Error adding guest:', error);
             }
         }
-    }, [guestInfo, email, validate, onAddGuest, onClose]);
+    }, [guestInfo, email, validate, onAddGuest, onClose, rooms]);
 
     const money = (n) => `₵${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
     const priceOf = (room) => {

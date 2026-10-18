@@ -3,6 +3,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CheckInModal from './CheckInModal';
 
 jest.mock('../supabaseClient', () => ({ __esModule: true, default: {} }));
+const mockSms = jest.fn();
+jest.mock('../services/smsService', () => ({ sendSmsNotification: (...a) => mockSms(...a) }));
 jest.mock('./DuplicateGuestHint', () => () => null);
 jest.mock('../context/ThemeContext', () => ({ useTheme: () => ({ theme: 'light' }) }));
 jest.mock('../context/RoomReservationContext', () => ({
@@ -40,5 +42,18 @@ describe('CheckInModal (walk-in check-in validation, #7)', () => {
     next(); // Complete check-in
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(onAddGuest).toHaveBeenCalledWith(expect.objectContaining({ name: 'Ama Boateng', phone: '0241234567', room: 1 }));
+    expect(mockSms).toHaveBeenCalledWith('checked_in', '0241234567', expect.objectContaining({ guestName: 'Ama Boateng', roomNumber: 101 }));
+  });
+
+  it('sends no confirmation when the guest could not be saved', async () => {
+    const onAddGuest = jest.fn(() => Promise.resolve({ success: false, error: 'db' }));
+    const onClose = jest.fn();
+    render(<CheckInModal isOpen onClose={onClose} onAddGuest={onAddGuest} />);
+    fireEvent.change(screen.getByPlaceholderText('Enter full name'), { target: { value: 'Ama' } });
+    fireEvent.change(screen.getByPlaceholderText('Enter phone number'), { target: { value: '0241234567' } });
+    next(); next(); next();
+    await waitFor(() => expect(onAddGuest).toHaveBeenCalled());
+    expect(mockSms).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });
