@@ -5,6 +5,29 @@ import { useTheme } from '../context/ThemeContext';
 import { useGuests } from '../context/GuestContext';
 import { sendStaffSms, getSmsLog } from '../services/smsService';
 import { buildProfiles, normalizePhone } from '../utils/guestIdentity';
+import '../styles/ComposeCard.css';
+
+const ICONS = {
+  user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0',
+  phone: 'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z',
+  calendar: 'M7 3v3m10-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z',
+  bed: 'M3 18V7m0 7h18v4M21 14v-2a3 3 0 0 0-3-3h-7v5M7 11h.01',
+  cash: 'M3 7h18v10H3V7Zm9 7.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z',
+  text: 'M4 6h16M4 12h16M4 18h10',
+  send: 'M21 3 10 14M21 3l-7 18-4-7-7-4 18-7Z',
+  info: 'M12 8h.01M11 12h1v5h1M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z'
+};
+const Icon = ({ name }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ICONS[name]} /></svg>
+);
+
+// Label + icon + elevated control
+const Field = ({ id, label, icon, span, area, children }) => (
+  <div className={`cc-field${span ? ' cc-span' : ''}`}>
+    <label className="cc-label" htmlFor={id}>{label}</label>
+    <div className={`cc-control${area ? ' cc-control--area' : ''}`}>{icon && <Icon name={icon} />}{children}</div>
+  </div>
+);
 
 const TEMPLATES = {
   arrival_reminder: { label: 'Arrival reminder', fields: ['checkInDate', 'roomNumber'], hint: 'Reminds the guest of their arrival date.' },
@@ -45,7 +68,6 @@ const CommunicationCenterPage = () => {
   const [notice, setNotice] = useState(null);
 
   const panel = `rounded-2xl border p-5 shadow-sm ${dark ? 'border-slate-700 bg-slate-900/70 text-white' : 'border-slate-200 bg-white text-slate-900'}`;
-  const input = `w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 ${dark ? 'border-slate-600 bg-slate-800 text-white' : 'border-slate-200 bg-white text-slate-900'}`;
   const profiles = useMemo(() => buildProfiles(guestList || []), [guestList]);
   const template = TEMPLATES[form.template];
 
@@ -109,31 +131,62 @@ const CommunicationCenterPage = () => {
           <p className="text-sm opacity-70">Send guest SMS and track delivery. Automatic messages (bookings, check-in/out) appear here too.</p>
         </div>
 
-        <section className={panel}>
-          <h2 className="mb-3 text-lg font-semibold">New message</h2>
-          <form onSubmit={send} className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <select aria-label="Pick an existing guest" defaultValue="" onChange={(e) => pickGuest(e.target.value)} className={input}>
-              <option value="">Pick an existing guest…</option>
-              {profiles.filter((p) => p.phones.length).map((p) => <option key={p.key} value={p.key}>{p.name} · +{p.phones[0]}</option>)}
-            </select>
-            <input aria-label="Phone number" placeholder="Phone (e.g. 024 123 4567)" value={form.phone} onChange={set('phone')} className={input} />
-            <input aria-label="Guest name" placeholder="Guest name" value={form.guestName} onChange={set('guestName')} className={input} />
-            <select aria-label="Template" value={form.template} onChange={set('template')} className={input}>
-              {Object.entries(TEMPLATES).map(([key, t]) => <option key={key} value={key}>{t.label}</option>)}
-            </select>
-            {template.fields.includes('checkInDate') && <input aria-label="Check-in date" type="date" value={form.checkInDate} onChange={set('checkInDate')} className={input} />}
-            {template.fields.includes('roomNumber') && <input aria-label="Room number" placeholder="Room number (optional)" value={form.roomNumber} onChange={set('roomNumber')} className={input} />}
-            {template.fields.includes('checkOutDate') && <input aria-label="Check-out date" type="date" value={form.checkOutDate} onChange={set('checkOutDate')} className={input} />}
-            {template.fields.includes('amount') && <input aria-label="Amount" type="number" min="0" step="0.01" placeholder="Amount (GH₵)" value={form.amount} onChange={set('amount')} className={input} />}
-            {template.fields.includes('detail') && <input aria-label="Update details" placeholder="e.g. your laundry is ready for collection" value={form.detail} onChange={set('detail')} className={`${input} md:col-span-2`} />}
-            {template.fields.includes('message') && (
-              <div className="md:col-span-2">
-                <textarea aria-label="Message" rows={3} maxLength={320} placeholder="Type your message" value={form.message} onChange={set('message')} className={input} />
-                <div className="mt-1 text-right text-xs opacity-60">{form.message.length}/320</div>
+        <section className={`cc-card${dark ? ' cc-card--dark' : ''}`} aria-labelledby="cc-title">
+          <header className="cc-head">
+            <span className="cc-head-icon"><Icon name="send" /></span>
+            <div>
+              <h2 id="cc-title" className="cc-title">New message</h2>
+              <p className="cc-sub">Send an SMS to a guest. Delivery status appears in the log below.</p>
+            </div>
+          </header>
+
+          <form onSubmit={send}>
+            <div className="cc-body">
+              <div className="cc-grid">
+                <Field id="cc-guest" label="Existing guest" icon="user" span>
+                  <select id="cc-guest" defaultValue="" onChange={(e) => pickGuest(e.target.value)} className="cc-select">
+                    <option value="">Pick a guest to fill in their details…</option>
+                    {profiles.filter((p) => p.phones.length).map((p) => <option key={p.key} value={p.key}>{p.name} · +{p.phones[0]}</option>)}
+                  </select>
+                </Field>
+                <Field id="cc-phone" label="Phone number" icon="phone">
+                  <input id="cc-phone" type="tel" inputMode="tel" placeholder="024 123 4567" value={form.phone} onChange={set('phone')} className="cc-input" />
+                </Field>
+                <Field id="cc-name" label="Guest name" icon="user">
+                  <input id="cc-name" placeholder="e.g. Ama Boateng" value={form.guestName} onChange={set('guestName')} className="cc-input" />
+                </Field>
               </div>
-            )}
-            <p className="text-xs opacity-60 md:col-span-2">{template.hint}</p>
-            <button disabled={sending} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60 md:col-span-2">{sending ? 'Sending…' : 'Send SMS'}</button>
+
+              <div role="radiogroup" aria-label="Message type">
+                <span className="cc-section-label">Message type</span>
+                <div className="cc-chips">
+                  {Object.entries(TEMPLATES).map(([key, t]) => (
+                    <button key={key} type="button" role="radio" aria-checked={form.template === key} onClick={() => setForm((f) => ({ ...f, template: key }))} className="cc-chip">{t.label}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="cc-grid">
+                {template.fields.includes('checkInDate') && <Field id="cc-in" label="Check-in date" icon="calendar"><input id="cc-in" type="date" value={form.checkInDate} onChange={set('checkInDate')} className="cc-input" /></Field>}
+                {template.fields.includes('roomNumber') && <Field id="cc-room" label="Room number (optional)" icon="bed"><input id="cc-room" placeholder="e.g. 4" value={form.roomNumber} onChange={set('roomNumber')} className="cc-input" /></Field>}
+                {template.fields.includes('checkOutDate') && <Field id="cc-out" label="Check-out date" icon="calendar"><input id="cc-out" type="date" value={form.checkOutDate} onChange={set('checkOutDate')} className="cc-input" /></Field>}
+                {template.fields.includes('amount') && <Field id="cc-amount" label="Amount (GH₵)" icon="cash"><input id="cc-amount" type="number" min="0" step="0.01" placeholder="0.00" value={form.amount} onChange={set('amount')} className="cc-input" /></Field>}
+                {template.fields.includes('detail') && <Field id="cc-detail" label="Update" icon="text" span><input id="cc-detail" placeholder="e.g. your laundry is ready for collection" value={form.detail} onChange={set('detail')} className="cc-input" /></Field>}
+                {template.fields.includes('message') && (
+                  <Field id="cc-message" label="Message" icon="text" span area>
+                    <textarea id="cc-message" rows={4} maxLength={320} placeholder="Type your message" value={form.message} onChange={set('message')} className="cc-textarea" />
+                    <div className={`cc-counter${form.message.length >= 320 ? ' is-max' : form.message.length >= 280 ? ' is-near' : ''}`}>{form.message.length}/320</div>
+                  </Field>
+                )}
+              </div>
+
+              <p className="cc-hint"><Icon name="info" />{template.hint}</p>
+            </div>
+
+            <footer className="cc-foot">
+              <small>Messages longer than 160 characters use more than one SMS credit.</small>
+              <button type="submit" disabled={sending} className="cc-send"><Icon name="send" />{sending ? 'Sending…' : 'Send SMS'}</button>
+            </footer>
           </form>
         </section>
 
