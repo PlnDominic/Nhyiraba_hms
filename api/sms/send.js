@@ -34,6 +34,7 @@ module.exports = async (req, res) => {
       return res.json({ success: true, skipped: true, message: 'SMS service not configured' });
     }
     if (!result.success) {
+      console.error('Arkesel rejected SMS:', result.error);
       return res.status(502).json({ success: false, error: result.error });
     }
     return res.json({ success: true });
