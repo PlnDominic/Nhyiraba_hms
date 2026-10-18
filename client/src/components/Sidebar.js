@@ -30,7 +30,10 @@ import {
   faClock,
   faClipboardCheck,
   faAddressBook,
-  faCommentSms
+  faCommentSms,
+  faCalendarCheck,
+  faCertificate,
+  faStar
 } from '@fortawesome/free-solid-svg-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useUser } from '../context/UserContext';
@@ -65,6 +68,9 @@ const Sidebar = ({ activeLink, isOpen, toggleSidebar }) => {
     { name: 'Communications', path: '/communications', icon: faCommentSms, show: isAdmin || isManager },
     { name: 'Staff', path: '/staff', icon: faUser, show: isAdmin || isManager },
     { name: 'Time & Attendance', path: '/time-attendance', icon: faClock },
+    { name: 'Leave', path: '/leave', icon: faCalendarCheck, show: true },
+    { name: 'Certifications', path: '/certifications', icon: faCertificate, show: true },
+    { name: 'Performance', path: '/reviews', icon: faStar, show: true },
     { name: 'Tasks', path: '/tasks', icon: faClipboardList },
     { name: 'Billing', path: '/billing', icon: faFileInvoiceDollar },
     { name: 'Revenue', path: '/revenue', icon: faMoneyBillWave, show: isAdmin || isManager },
