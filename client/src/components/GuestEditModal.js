@@ -71,7 +71,7 @@ const GuestEditModal = ({ isOpen, onClose, guest, onUpdateGuest }) => {
 
   const validate = useCallback(() => {
     const newErrors = {};
-    if (!guestInfo.fullName || !guestInfo.fullName.trim()) newErrors.fullName = 'Full Name is required';
+    if (!guestInfo.fullName || !guestInfo.fullName.trim()) newErrors.fullName = 'Enter the guest\'s name';
     if (!guestInfo.room) newErrors.room = 'Room is required';
     if (!guestInfo.checkIn) newErrors.checkIn = 'Check In is required';
     if (!guestInfo.checkOut) {
@@ -122,7 +122,7 @@ const GuestEditModal = ({ isOpen, onClose, guest, onUpdateGuest }) => {
           <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>GUEST INFO</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
-              <label className={`block text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Full Name</label>
+              <label className={`block text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Name (first name is enough)</label>
               <input
                 type="text"
                 name="fullName"

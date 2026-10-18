@@ -57,7 +57,7 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
 
     if (step === 1) {
       // Guest information validation
-      if (!formData.guestName.trim()) newErrors.guestName = 'Guest name is required';
+      if (!formData.guestName.trim()) newErrors.guestName = 'Enter the guest\'s name';
       if (!formData.phoneNumber.trim()) newErrors.phoneNumber = 'Phone number is required';
     } else if (step === 2) {
       if (!formData.roomNumber) newErrors.roomNumber = 'Please select a room';
@@ -174,7 +174,7 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
       return (
         <Step title="Guest details" lead="Who is the booking for?">
           <div className="sm-grid">
-            <Field label="Full name" error={errors.guestName}>
+            <Field label="Name (first name is enough)" error={errors.guestName}>
               <input className="sm-input" type="text" name="guestName" value={formData.guestName} onChange={handleChange} placeholder="Enter guest name" autoComplete="off" autoFocus />
             </Field>
             <Field label="Phone number" error={errors.phoneNumber}>

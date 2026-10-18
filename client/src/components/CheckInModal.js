@@ -71,7 +71,7 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
 
     const validate = useCallback(() => {
         const newErrors = {};
-        if (!guestInfo.fullName || !guestInfo.fullName.trim()) newErrors.fullName = 'Full Name is required';
+        if (!guestInfo.fullName || !guestInfo.fullName.trim()) newErrors.fullName = 'Enter the guest\'s name';
         if (!String(guestInfo.phone || '').trim() && !String(email || '').trim()) newErrors.phone = 'Enter a phone number or email address';
         if (!guestInfo.room) newErrors.room = 'Room is required';
         if (!guestInfo.checkIn) newErrors.checkIn = 'Check In is required';
@@ -160,8 +160,8 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
             return (
                 <Step title="Guest details" lead="Register the arriving guest.">
                     <div className="sm-grid">
-                        <Field label="Full name" error={errors.fullName} span>
-                            <input className="sm-input" type="text" name="fullName" value={guestInfo.fullName} onChange={handleChange} placeholder="Enter full name" autoComplete="off" autoFocus />
+                        <Field label="Name (first name is enough)" error={errors.fullName} span>
+                            <input className="sm-input" type="text" name="fullName" value={guestInfo.fullName} onChange={handleChange} placeholder="Enter guest name" autoComplete="off" autoFocus />
                         </Field>
                         <Field label="Phone" error={errors.phone}>
                             <input className="sm-input" type="tel" name="phone" value={guestInfo.phone} onChange={handleChange} placeholder="Enter phone number" autoComplete="off" />

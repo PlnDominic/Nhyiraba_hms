@@ -249,7 +249,7 @@ const ReservationEditModal = ({ isOpen, onClose, reservation, onUpdate, rooms })
                     value={formData.guestName}
                     onChange={handleChange}
                 className={`form-input ${errors.guestName ? 'border-red-500' : ''}`}
-                placeholder="Full name"
+                placeholder="First name is enough"
                   />
             </div>
             {errors.guestName && <p className="text-red-500 text-xs mt-1">{errors.guestName}</p>}

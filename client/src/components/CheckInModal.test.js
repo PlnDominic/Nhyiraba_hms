@@ -21,7 +21,7 @@ const next = () => fireEvent.click(screen.getByRole('button', { name: /continue|
 describe('CheckInModal (walk-in check-in validation, #7)', () => {
   it('requires a contact detail before leaving the guest step', () => {
     render(<CheckInModal isOpen onClose={() => {}} onAddGuest={jest.fn()} />);
-    fireEvent.change(screen.getByPlaceholderText('Enter full name'), { target: { value: 'Ama Boateng' } });
+    fireEvent.change(screen.getByPlaceholderText('Enter guest name'), { target: { value: 'Ama Boateng' } });
     next();
     expect(screen.getByText('Enter a phone number or email address')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Guest details' })).toBeInTheDocument();
@@ -32,7 +32,7 @@ describe('CheckInModal (walk-in check-in validation, #7)', () => {
     const onClose = jest.fn();
     render(<CheckInModal isOpen onClose={onClose} onAddGuest={onAddGuest} />);
 
-    fireEvent.change(screen.getByPlaceholderText('Enter full name'), { target: { value: 'Ama Boateng' } });
+    fireEvent.change(screen.getByPlaceholderText('Enter guest name'), { target: { value: 'Ama Boateng' } });
     fireEvent.change(screen.getByPlaceholderText('Enter phone number'), { target: { value: '0241234567' } });
     next(); // -> Room & dates (room 101 preselected)
     next(); // -> Review (no verification step)
@@ -49,7 +49,7 @@ describe('CheckInModal (walk-in check-in validation, #7)', () => {
     const onAddGuest = jest.fn(() => Promise.resolve({ success: false, error: 'db' }));
     const onClose = jest.fn();
     render(<CheckInModal isOpen onClose={onClose} onAddGuest={onAddGuest} />);
-    fireEvent.change(screen.getByPlaceholderText('Enter full name'), { target: { value: 'Ama' } });
+    fireEvent.change(screen.getByPlaceholderText('Enter guest name'), { target: { value: 'Ama' } });
     fireEvent.change(screen.getByPlaceholderText('Enter phone number'), { target: { value: '0241234567' } });
     next(); next(); next();
     await waitFor(() => expect(onAddGuest).toHaveBeenCalled());

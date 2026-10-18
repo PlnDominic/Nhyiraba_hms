@@ -221,7 +221,7 @@ export const GuestProvider = ({ children }) => {
             check_out: adjustedCheckOut.toISOString(),
             status: newGuest.status || 'Checked In',
             first_name: newGuest.firstName || null,
-            last_name: newGuest.lastName || null,
+            last_name: newGuest.lastName || '', // a first name alone is enough
             date_of_birth: newGuest.dateOfBirth ? new Date(newGuest.dateOfBirth).toISOString() : null,
             gender: newGuest.gender || null,
             nationality: newGuest.nationality || null,
