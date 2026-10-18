@@ -36,7 +36,7 @@ const handleSend = async (authHeader, payload = {}) => {
   const auth = await authenticate(authHeader);
   if (auth.error) return auth.error;
 
-  const { event, phone, data } = payload;
+  const { event, phone, data, retryOf } = payload;
   const message = buildMessage(event, data);
   if (!phone || !message) {
     return { status: 400, body: { success: false, error: 'Missing or invalid fields: event, phone' } };
@@ -55,6 +55,7 @@ const handleSend = async (authHeader, payload = {}) => {
     status: result.success ? 'SUBMITTING' : 'FAILED',
     error: result.success ? null : result.error,
     sent_by: auth.user.id,
+    ...(retryOf ? { retry_of: retryOf } : {}),
   });
 
   if (!result.success) {

@@ -25,6 +25,8 @@ import DebugUserContext from './components/DebugUserContext';
 const LandingPage = lazy(() => import('./components/LandingPage'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const GuestsPage = lazy(() => import('./components/GuestsPage'));
+const GuestProfilesPage = lazy(() => import('./components/GuestProfilesPage'));
+const CommunicationCenterPage = lazy(() => import('./components/CommunicationCenterPage'));
 const TasksPage = lazy(() => import('./components/TasksPage'));
 const BillingPage = lazy(() => import('./components/BillingPage'));
 const ServicesPage = lazy(() => import('./components/ServicesPage'));
@@ -145,6 +147,16 @@ const App = () => {
       <Route path="/guests" element={
         <ProtectedRoute>
           <GuestsPage key="guests" />
+        </ProtectedRoute>
+      } />
+      <Route path="/guest-profiles" element={
+        <ProtectedRoute>
+          <GuestProfilesPage key="guest-profiles" />
+        </ProtectedRoute>
+      } />
+      <Route path="/communications" element={
+        <ProtectedRoute>
+          <CommunicationCenterPage key="communications" />
         </ProtectedRoute>
       } />
       <Route path="/staff" element={

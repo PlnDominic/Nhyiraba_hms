@@ -28,7 +28,9 @@ import {
   faShoppingCart,
   faMoneyBillWave,
   faClock,
-  faClipboardCheck
+  faClipboardCheck,
+  faAddressBook,
+  faCommentSms
 } from '@fortawesome/free-solid-svg-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useUser } from '../context/UserContext';
@@ -59,6 +61,8 @@ const Sidebar = ({ activeLink, isOpen, toggleSidebar }) => {
     { name: 'Reservations', path: '/reservations', icon: faCalendar },
     { name: 'Rooms', path: '/rooms', icon: faBed },
     { name: 'Guests', path: '/guests', icon: faUsers },
+    { name: 'Guest Profiles', path: '/guest-profiles', icon: faAddressBook, show: hasDepartmentAccess('Guests') },
+    { name: 'Communications', path: '/communications', icon: faCommentSms, show: isAdmin || isManager },
     { name: 'Staff', path: '/staff', icon: faUser, show: isAdmin || isManager },
     { name: 'Time & Attendance', path: '/time-attendance', icon: faClock },
     { name: 'Tasks', path: '/tasks', icon: faClipboardList },
