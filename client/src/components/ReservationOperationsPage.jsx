@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import DashboardLayout from './DashboardLayout';
+import { HousekeepingPanel, WaitlistPanel } from './OperationsExtras';
 import { useTheme } from '../context/ThemeContext';
 import { useRoomReservation } from '../context/RoomReservationContext';
 import {
@@ -49,10 +50,10 @@ const ReservationOperationsPage = () => {
   const noShows = useMemo(() => reservations.filter((reservation) => ['Reserved', 'Confirmed'].includes(reservation.status) && new Date(reservation.check_in_date) <= new Date()), [reservations]);
   const roomTypes = useMemo(() => [...new Set(rooms.map((room) => room.type).filter(Boolean))], [rooms]);
 
-  const showNotice = (message, type = 'success') => {
+  const showNotice = useCallback((message, type = 'success') => {
     setNotice({ message, type });
     window.setTimeout(() => setNotice(null), 4500);
-  };
+  }, []);
 
   const searchAvailability = async () => {
     const result = await getAvailableRooms(availability);
@@ -175,6 +176,9 @@ const ReservationOperationsPage = () => {
           </div>
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">{availableRooms.map((room) => <div key={room.id} className={`rounded-xl border p-3 ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-slate-50'}`}><div className="font-semibold">Room {room.room_number}</div><div className="text-sm opacity-70">{room.type} · GH₵{room.price}</div><button onClick={() => setWalkIn({ ...walkIn, roomId: room.id })} className="mt-3 text-sm font-semibold text-blue-600">Use for walk-in</button></div>)}</div>
         </section>
+
+        <WaitlistPanel onNotice={showNotice} />
+        <HousekeepingPanel onNotice={showNotice} />
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <section className={panelClass(isDarkMode)}><h2 className="mb-1 text-lg font-semibold">Walk-in guest</h2><p className="mb-4 text-sm opacity-70">Create today’s reservation and place the guest in the check-in queue.</p><form onSubmit={createWalkIn} className="space-y-3"><input placeholder="Guest full name" value={walkIn.guestName} onChange={(event) => setWalkIn({ ...walkIn, guestName: event.target.value })} className={inputClass(isDarkMode)} /><input placeholder="Phone number" value={walkIn.phoneNumber} onChange={(event) => setWalkIn({ ...walkIn, phoneNumber: event.target.value })} className={inputClass(isDarkMode)} /><div className="grid grid-cols-2 gap-3"><select value={walkIn.roomId} onChange={(event) => setWalkIn({ ...walkIn, roomId: event.target.value })} className={inputClass(isDarkMode)}><option value="">Select room</option>{availableRooms.map((room) => <option key={room.id} value={room.id}>Room {room.room_number} · {room.type}</option>)}</select><input type="date" value={walkIn.checkOut} min={today} onChange={(event) => setWalkIn({ ...walkIn, checkOut: event.target.value })} className={inputClass(isDarkMode)} /></div><button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Create walk-in</button></form></section>

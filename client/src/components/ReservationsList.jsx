@@ -10,6 +10,8 @@ import ReservationViewModal from './ReservationViewModal';
 import ReservationEditModal from './ReservationEditModal';
 import { deleteReservation } from '../services/reservationService';
 import { sendSmsNotification, reservationSmsData } from '../services/smsService';
+import { saveCheckInRecord } from '../services/operationsService';
+import CheckInValidationModal from './CheckInValidationModal';
 
 const ReservationsList = () => {
   const { theme } = useTheme();
@@ -39,6 +41,7 @@ const ReservationsList = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedCancellation, setSelectedCancellation] = useState(null);
   const [selectedReservation, setSelectedReservation] = useState(null);
+  const [checkInTarget, setCheckInTarget] = useState(null);
 
   // Add animation state for list items
   const [animatedItems, setAnimatedItems] = useState({});
@@ -170,9 +173,17 @@ const ReservationsList = () => {
     }
   };
 
-  const handleCheckIn = async (reservation) => {
-    if (window.confirm(`Check in ${reservation.guest_name}?`)) {
+  // Opens the validation modal; performCheckIn runs once every requirement is met
+  const handleCheckIn = (reservation) => setCheckInTarget(reservation);
+
+  const performCheckIn = async (reservation, form) => {
+    if (form) {
       try {
+        const { error: recordError } = await saveCheckInRecord({ reservation, form });
+        if (recordError) {
+          console.warn('Could not save check-in record:', recordError.message);
+        }
+
         // Prepare guest data from reservation
         const guestData = {
           name: reservation.guest_name,
@@ -279,7 +290,7 @@ const ReservationsList = () => {
         });
         document.dispatchEvent(updateOccupancyEvent);
 
-        sendSmsNotification('checked_in', reservation.guest_phone, reservationSmsData(reservation));
+        sendSmsNotification('checked_in', reservation.guest_phone || form.phone, reservationSmsData(reservation));
 
         alert('Guest checked in successfully and moved to Guest Directory!');
       } catch (error) {
@@ -1478,6 +1489,19 @@ const ReservationsList = () => {
         onUpdate={handleUpdateReservation}
         rooms={rooms}
       />
+
+      {checkInTarget && (
+        <CheckInValidationModal
+          reservation={checkInTarget}
+          room={rooms.find(room => String(room.id) === String(checkInTarget.room_id))}
+          onCancel={() => setCheckInTarget(null)}
+          onConfirm={async (form) => {
+            const target = checkInTarget;
+            setCheckInTarget(null);
+            await performCheckIn(target, form);
+          }}
+        />
+      )}
 
       {/* Toast Message */}
       {toastMessage && (

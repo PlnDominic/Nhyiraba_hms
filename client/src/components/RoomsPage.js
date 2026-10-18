@@ -8,6 +8,7 @@ import Button from './ui/Button';
 import CheckInModal from './CheckInModal';
 import RoomTooltip from './RoomTooltip';
 import RoomContextMenu from './RoomContextMenu';
+import CheckoutSettlementModal from './CheckoutSettlementModal';
 
 const RoomsPage = () => {
   const { theme } = useTheme();
@@ -20,6 +21,7 @@ const RoomsPage = () => {
   const [selectedRoomId, setSelectedRoomId] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all');
   const [activeBlockFilter, setActiveBlockFilter] = useState('all');
+  const [settlementRoomId, setSettlementRoomId] = useState(null);
   
   // Context menu state
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
@@ -101,7 +103,7 @@ const RoomsPage = () => {
 
   // Function to handle checkout
   const handleCheckOut = (roomId) => {
-    checkOutGuest(roomId);
+    setSettlementRoomId(roomId);
   };
 
   // Function to set room to maintenance
@@ -413,6 +415,19 @@ const RoomsPage = () => {
         />
       )}
       
+      {settlementRoomId !== null && (
+        <CheckoutSettlementModal
+          roomId={settlementRoomId}
+          onCancel={() => setSettlementRoomId(null)}
+          onSettled={async () => {
+            const roomId = settlementRoomId;
+            setSettlementRoomId(null);
+            await checkOutGuest(roomId);
+            await refreshData(true);
+          }}
+        />
+      )}
+
       {/* Room context menu */}
       {contextMenuVisible && contextMenuRoom && (
         <RoomContextMenu

@@ -11,6 +11,7 @@ import { FaEye, FaEdit, FaTrash, FaSignOutAlt, FaSearch, FaUserPlus, FaUserCheck
 import { useRoomReservation } from '../context/RoomReservationContext';
 import { toast } from 'react-hot-toast';
 import Card from './ui/Card';
+import CheckoutSettlementModal from './CheckoutSettlementModal';
 
 const GuestsPage = () => {
     const { guestList, addGuestToList, viewGuest, editGuest, deleteGuest, refreshGuests } = useGuests();
@@ -22,6 +23,7 @@ const GuestsPage = () => {
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [selectedGuest, setSelectedGuest] = useState(null);
+    const [settlementGuestId, setSettlementGuestId] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [recentActivities, setRecentActivities] = useState([]);
 
@@ -257,7 +259,17 @@ const GuestsPage = () => {
         }
     };
 
+    // Check-out opens the settlement folio first; performCheckOut runs once it is settled
     const handleCheckOut = (guestId) => {
+        const guest = guestList.find(g => g.id === guestId);
+        if (guest && guest.room) {
+            setSettlementGuestId(guestId);
+        } else {
+            performCheckOut(guestId);
+        }
+    };
+
+    const performCheckOut = (guestId) => {
         const guest = guestList.find(g => g.id === guestId);
         if (guest) {
             // Update guest status to Checked Out
@@ -676,6 +688,18 @@ const GuestsPage = () => {
                         onUpdateGuest={handleEditSubmit}
                     />
                 </>
+            )}
+
+            {settlementGuestId && (
+                <CheckoutSettlementModal
+                    roomId={guestList.find(g => g.id === settlementGuestId)?.room}
+                    onCancel={() => setSettlementGuestId(null)}
+                    onSettled={() => {
+                        const guestId = settlementGuestId;
+                        setSettlementGuestId(null);
+                        performCheckOut(guestId);
+                    }}
+                />
             )}
 
             <DeleteConfirmationModal

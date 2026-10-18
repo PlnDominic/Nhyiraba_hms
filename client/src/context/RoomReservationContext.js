@@ -11,7 +11,8 @@ import {
   validateRoomAvailability,
   markReservationNoShow,
   reassignReservation,
-  cancelReservationWithPolicy
+  cancelReservationWithPolicy,
+  friendlyReservationError
 } from '../services/operationsService';
 
 const RoomReservationContext = createContext();
@@ -336,6 +337,19 @@ export const RoomReservationProvider = ({ children }) => {
         payload: { roomId, status: 'Available' }
       });
 
+      // Persist the room status even when no reservation row exists (check-in removes it)
+      const { error: roomError } = await supabase
+        .from('rooms')
+        .update({ status: 'Available', updated_at: new Date().toISOString() })
+        .eq('id', roomId);
+      if (roomError) throw roomError;
+
+      await supabase
+        .from('guests')
+        .update({ status: 'Checked Out', updated_at: new Date().toISOString() })
+        .eq('room', String(roomId))
+        .eq('status', 'Checked In');
+
       // Find the active reservation for this room
       const activeReservation = state.reservations.find(
         res => res.room_id === roomId && res.status === 'Checked In'
@@ -477,7 +491,7 @@ export const RoomReservationProvider = ({ children }) => {
     } catch (error) {
       console.error('Error creating reservation:', error);
       console.error('Error stack:', error.stack);
-      return { success: false, error: error.message };
+      return { success: false, error: friendlyReservationError(error) };
     }
   };
 
@@ -554,6 +568,22 @@ export const RoomReservationProvider = ({ children }) => {
   // Update a reservation
   const updateReservation = async (reservationData) => {
     try {
+      // Re-check availability (excluding this reservation) when dates are being changed
+      const existing = state.reservations.find(r => r.id === reservationData.id);
+      const newCheckIn = reservationData.checkInDate || reservationData.check_in_date;
+      const newCheckOut = reservationData.checkOutDate || reservationData.check_out_date;
+      if (existing && newCheckIn && newCheckOut && ['Reserved', 'Confirmed'].includes(existing.status)) {
+        const availability = await validateRoomAvailability(
+          existing.room_id,
+          String(newCheckIn).slice(0, 10),
+          String(newCheckOut).slice(0, 10),
+          existing.id
+        );
+        if (availability.error) {
+          return { success: false, error: availability.error.message };
+        }
+      }
+
       // Update local state first
       dispatch({
         type: 'UPDATE_RESERVATION',
@@ -595,7 +625,7 @@ export const RoomReservationProvider = ({ children }) => {
       return { success: true };
     } catch (error) {
       console.error('Error updating reservation:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: friendlyReservationError(error) };
     }
   };
 
