@@ -2019,7 +2019,7 @@ const Dashboard = () => {
                       <h4 className={`text-lg font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'} pb-2`}>
                         Main Block
                       </h4>
-                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2">
+                      <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 gap-2">
                         {rooms.slice(0, 28).map((room) => (
                           <div
                             key={room.id}
@@ -2030,19 +2030,19 @@ const Dashboard = () => {
                             className={`relative p-2 rounded-lg border cursor-pointer transition-all duration-200 transform hover:scale-[1.03] ${getRoomStatusClass(room.status, isDarkMode)}`}
                           >
                             <div className="flex justify-between items-start mb-1">
-                              <span className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                              <span className={`font-bold text-base ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                                 {room.room_number || room.name}
                               </span>
                               <div className={`w-2 h-2 rounded-full ${getRoomStatusIndicator(room.status, isDarkMode)}`}></div>
                             </div>
 
                             {/* Room Price */}
-                            <div className={`text-xs font-semibold mb-1 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
+                            <div className={`text-[13px] font-semibold mb-1 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
                               GH₵{room.price ? room.price.toFixed(2) : '0.00'}
                             </div>
 
                             <div className="mt-1">
-                              <div className={`text-xs truncate ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                              <div className={`text-[13px] truncate ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                                 {room.status === 'Occupied' && room.guest ? (
                                   <span className="flex items-center">
                                     <i className="fas fa-user mr-1 text-xs opacity-70"></i>
@@ -2078,7 +2078,7 @@ const Dashboard = () => {
                       <h4 className={`text-lg font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'} pb-2`}>
                         Acquarian Block
                       </h4>
-                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2">
+                      <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 gap-2">
                         {rooms.slice(28).map((room) => (
                           <div
                             key={room.id}
@@ -2089,19 +2089,19 @@ const Dashboard = () => {
                             className={`relative p-2 rounded-lg border cursor-pointer transition-all duration-200 transform hover:scale-[1.03] ${getRoomStatusClass(room.status, isDarkMode)}`}
                           >
                             <div className="flex justify-between items-start mb-1">
-                              <span className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                              <span className={`font-bold text-base ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                                 {room.room_number || room.name}
                               </span>
                               <div className={`w-2 h-2 rounded-full ${getRoomStatusIndicator(room.status, isDarkMode)}`}></div>
                             </div>
 
                             {/* Room Price */}
-                            <div className={`text-xs font-semibold mb-1 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
+                            <div className={`text-[13px] font-semibold mb-1 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
                               GH₵{room.price ? room.price.toFixed(2) : '0.00'}
                             </div>
 
                             <div className="mt-1">
-                              <div className={`text-xs truncate ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                              <div className={`text-[13px] truncate ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                                 {room.status === 'Occupied' && room.guest ? (
                                   <span className="flex items-center">
                                     <i className="fas fa-user mr-1 text-xs opacity-70"></i>
