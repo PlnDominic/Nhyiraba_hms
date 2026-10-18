@@ -258,7 +258,10 @@ export const RoomReservationProvider = ({ children }) => {
 
       // Also fetch reservations
       try {
-        const reservationsData = await getReservations();
+        // The service answers { data, error }, not a bare array
+        const reservationsResult = await getReservations();
+        if (reservationsResult?.error) throw reservationsResult.error;
+        const reservationsData = Array.isArray(reservationsResult) ? reservationsResult : reservationsResult?.data;
         if (reservationsData && Array.isArray(reservationsData)) {
           console.log(`Dispatching ${reservationsData.length} reservations to state`);
           dispatch({ type: 'SET_RESERVATIONS', payload: reservationsData });
