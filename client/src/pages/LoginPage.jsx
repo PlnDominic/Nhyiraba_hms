@@ -106,7 +106,10 @@ const LoginPage = () => {
         console.log('3. User does not exist in Supabase Auth');
       }
 
-      setError(err.message || 'Invalid email or password');
+      const deactivated = err.code === 'user_banned' || /banned/i.test(err.message || '');
+      setError(deactivated
+        ? 'This account has been deactivated. Please contact an administrator.'
+        : (err.message || 'Invalid email or password'));
       toast.error('Login failed');
     } finally {
       setIsLoading(false);

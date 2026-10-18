@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import supabase from '../supabaseClient';
 
 // Create a simple user context without authentication
 const UserContext = createContext();
@@ -161,6 +162,20 @@ export const UserProvider = ({ children }) => {
                 if (savedUser) {
                     const userData = JSON.parse(savedUser);
                     console.log('UserContext: Restoring user from localStorage:', userData);
+
+                    // A saved user is only trusted while the server still accepts their session.
+                    // Offboarded (banned) staff have their sessions ended, so drop them here.
+                    // Network failures keep the user, so offline mode is unaffected.
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (session) {
+                        const { error: sessionError } = await supabase.auth.getUser();
+                        if (sessionError && [401, 403].includes(sessionError.status)) {
+                            console.warn('UserContext: session rejected by server, signing out');
+                            await supabase.auth.signOut({ scope: 'local' });
+                            await setCurrentUser(null);
+                            return;
+                        }
+                    }
                     // setCurrentUser will handle setting user and fetching/setting permissions
                     await setCurrentUser(userData);
                 }

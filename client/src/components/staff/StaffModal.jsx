@@ -313,14 +313,20 @@ const StaffModal = ({ isOpen, onClose, onSave, staff, viewMode = false }) => {
                       name="status"
                       value={formData.status}
                       onChange={handleChange}
-                      disabled={viewMode}
+                      disabled={viewMode || formData.status === 'Left'}
                       className={`w-full p-3.5 border rounded-xl transition-all duration-200 ${inputClass} focus:outline-none cursor-pointer`}
                     >
                       <option value="Active">Active</option>
                       <option value="Inactive">Inactive</option>
                       <option value="On Leave">On Leave</option>
                       <option value="Terminated">Terminated</option>
+                      {formData.status === 'Left' && <option value="Left">Left</option>}
                     </select>
+                    {formData.status === 'Left' && (
+                      <p className={`mt-2 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        This person has left. An administrator can reinstate them from Former staff.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

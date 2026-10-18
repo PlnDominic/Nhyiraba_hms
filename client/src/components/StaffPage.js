@@ -9,6 +9,8 @@ import StaffList from './staff/StaffList';
 import StaffScheduler from './staff/StaffScheduler';
 
 import StaffModal from './staff/StaffModal';
+import StaffOffboardModal from './staff/StaffOffboardModal';
+import { findFormerStaffByEmail, isCurrentStaff, splitStaff } from '../utils/staffLifecycle';
 
 const StaffPage = () => {
   const { user } = useUser();
@@ -19,12 +21,18 @@ const StaffPage = () => {
     fetchStaff,
     addStaff,
     updateStaff,
-    deleteStaff
+    deleteStaff,
+    offboardStaff,
+    reinstateStaff
   } = useStaff();
+
+  const isAdmin = user?.role === 'admin' || user?.role === 'administrator';
 
   const [activeTab, setActiveTab] = useState('staff');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentStaff, setCurrentStaff] = useState(null);
+  const [staffView, setStaffView] = useState('current'); // 'current' | 'former'
+  const [offboardTarget, setOffboardTarget] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [dataFetched, setDataFetched] = useState(false);
 
@@ -60,7 +68,7 @@ const StaffPage = () => {
   };
 
   const handleDeleteStaff = async (id) => {
-    if (window.confirm('Are you sure you want to delete this staff member?')) {
+    if (window.confirm('Delete this staff member and ALL of their schedules and attendance records? This cannot be undone. If they have left, use "Record departure" instead so the history is kept.')) {
       const result = await deleteStaff(id);
       if (result.success) {
         toast.success('Staff member deleted successfully');
@@ -74,6 +82,11 @@ const StaffPage = () => {
     if (currentStaff) {
       result = await updateStaff(currentStaff.id, staffData);
     } else {
+      const returning = findFormerStaffByEmail(staff, staffData.email);
+      if (returning) {
+        toast.error(`${returning.first_name} ${returning.last_name} used to work here. Open "Former staff" and reinstate them instead of adding a new record.`);
+        return;
+      }
       result = await addStaff(staffData);
     }
 
@@ -84,14 +97,50 @@ const StaffPage = () => {
     }
   };
 
+  const handleOffboardConfirm = async (details) => {
+    const result = await offboardStaff(offboardTarget.id, details);
+    if (!result.success) return;
+
+    const name = `${offboardTarget.first_name} ${offboardTarget.last_name}`;
+    const { has_login, login_disabled, cancelled_shifts } = result.outcome || {};
+    const parts = [`${name}'s departure is recorded.`];
+    if (login_disabled) parts.push('Their login is switched off.');
+    else if (details.disableLogin && !has_login) parts.push('No login account was linked to them, so there was nothing to switch off. Check Staff Access.');
+    else if (!details.disableLogin) parts.push('Their login is still on.');
+    if (cancelled_shifts) parts.push(`${cancelled_shifts} later shift(s) cancelled.`);
+    toast.success(parts.join(' '), { duration: 7000 });
+    setOffboardTarget(null);
+  };
+
+  const handleReinstate = async (member) => {
+    const name = `${member.first_name} ${member.last_name}`;
+    if (!window.confirm(`Reinstate ${name}? Their status returns to Active and their login is switched back on.`)) return;
+
+    const result = await reinstateStaff(member.id);
+    if (!result.success) return;
+
+    toast.success(
+      result.outcome?.login_enabled
+        ? `${name} is reinstated and can sign in again.`
+        : `${name} is reinstated. They had no linked login, so create one in Staff Access if they need it.`,
+      { duration: 7000 }
+    );
+    setStaffView('current');
+  };
+
+  const counts = React.useMemo(() => {
+    const { current, former } = splitStaff(staff);
+    return { current: current.length, former: former.length };
+  }, [staff]);
+
   // Memoize this filtering operation to prevent unnecessary recalculations
   const filteredStaff = React.useMemo(() =>
-    staff.filter(member =>
+    staff.filter(member => (staffView === 'former' ? !isCurrentStaff(member) : isCurrentStaff(member))).filter(member =>
       member.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       member.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       member.position?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       member.department?.toLowerCase().includes(searchTerm.toLowerCase())
-    ), [staff, searchTerm]);
+    ), [staff, searchTerm, staffView]);
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -101,6 +150,8 @@ const StaffPage = () => {
             staff={filteredStaff}
             onEdit={handleEditStaff}
             onDelete={handleDeleteStaff}
+            onOffboard={setOffboardTarget}
+            onReinstate={isAdmin ? handleReinstate : undefined}
           />
         );
       case 'scheduling':
@@ -180,6 +231,26 @@ const StaffPage = () => {
         </div>
       )}
 
+      {activeTab === 'staff' && (
+        <div className="flex space-x-2 mb-4">
+          {[
+            ['current', `Current staff (${counts.current})`],
+            ['former', `Former staff (${counts.former})`]
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setStaffView(key)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${staffView === key
+                ? 'bg-blue-500/20 text-blue-500 dark:text-blue-300'
+                : 'text-gray-500 hover:bg-white/10 dark:text-gray-400'
+                }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Content Area */}
       <div className="relative">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-pink-500/5 rounded-2xl blur-2xl"></div>
@@ -208,6 +279,13 @@ const StaffPage = () => {
           />
         )
       }
+      {offboardTarget && (
+        <StaffOffboardModal
+          staff={offboardTarget}
+          onClose={() => setOffboardTarget(null)}
+          onConfirm={handleOffboardConfirm}
+        />
+      )}
     </DashboardLayout >
   );
 };

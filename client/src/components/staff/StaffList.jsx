@@ -1,13 +1,23 @@
 import React from 'react';
-import { FaEdit, FaTrash, FaEye, FaCalendarCheck, FaChartLine } from 'react-icons/fa';
+import { FaEdit, FaTrash, FaEye, FaCalendarCheck, FaChartLine, FaUserSlash, FaUndo } from 'react-icons/fa';
+import { isCurrentStaff, tenureLabel } from '../../utils/staffLifecycle';
 
-const StaffList = ({ staff, onEdit, onDelete, onViewDetails }) => {
+const formatDate = (value) => {
+  const d = value ? new Date(value) : null;
+  return d && !Number.isNaN(d.getTime())
+    ? d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+    : '';
+};
+
+const StaffList = ({ staff, onEdit, onDelete, onViewDetails, onOffboard, onReinstate }) => {
   const getStatusBadgeClass = (status) => {
-    switch (status) {
+    switch (String(status ?? '').toLowerCase().replace(/\s+/g, '_')) {
       case 'active':
         return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
       case 'on_leave':
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
+      case 'left':
+        return 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200';
       case 'terminated':
         return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
       case 'suspended':
@@ -93,6 +103,15 @@ const StaffList = ({ staff, onEdit, onDelete, onViewDetails }) => {
                   <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(member.status)}`}>
                     {formatStatus(member.status)}
                   </span>
+                  {!isCurrentStaff(member) && (
+                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {member.end_date && <div>Left {formatDate(member.end_date)}</div>}
+                      {member.leaving_reason && <div>{member.leaving_reason}</div>}
+                      {tenureLabel(member.hire_date, member.end_date) && (
+                        <div>{tenureLabel(member.hire_date, member.end_date)} with us</div>
+                      )}
+                    </div>
+                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   <div className="flex space-x-2">
@@ -103,6 +122,24 @@ const StaffList = ({ staff, onEdit, onDelete, onViewDetails }) => {
                     >
                       <FaEdit size={18} />
                     </button>
+                    {isCurrentStaff(member) && onOffboard && (
+                      <button
+                        onClick={() => onOffboard(member)}
+                        className="text-orange-600 hover:text-orange-900 dark:text-orange-400 dark:hover:text-orange-300"
+                        title="Record departure"
+                      >
+                        <FaUserSlash size={18} />
+                      </button>
+                    )}
+                    {!isCurrentStaff(member) && onReinstate && (
+                      <button
+                        onClick={() => onReinstate(member)}
+                        className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
+                        title="Reinstate"
+                      >
+                        <FaUndo size={18} />
+                      </button>
+                    )}
                     <button
                       onClick={() => onDelete(member.id)}
                       className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"

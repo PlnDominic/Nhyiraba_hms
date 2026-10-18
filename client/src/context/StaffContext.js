@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import supabase from '../supabaseClient';
 import { toast } from 'react-hot-toast';
+import { isCurrentStaff } from '../utils/staffLifecycle';
 
 const StaffContext = createContext();
 
@@ -270,6 +271,53 @@ export const StaffProvider = ({ children }) => {
     } catch (error) {
       console.error('Error deleting staff:', error);
       toast.error(`Failed to delete staff: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Re-read one staff row after a server-side change (fetchStaff is throttled)
+  const refreshStaffMember = async (id) => {
+    const { data, error } = await supabase.from('staff').select('*').eq('id', id).single();
+    if (error) throw error;
+    setStaff(prev => prev.map(s => s.id === id ? data : s));
+    return data;
+  };
+
+  // Record that a staff member has left. History is kept; their login is switched off.
+  const offboardStaff = async (id, { endDate, reason, notes, disableLogin = true }) => {
+    try {
+      const { data: outcome, error } = await supabase.rpc('offboard_staff_member', {
+        p_staff_id: id,
+        p_end_date: endDate,
+        p_reason: reason,
+        p_notes: notes || null,
+        p_disable_login: disableLogin
+      });
+
+      if (error) throw error;
+      const member = await refreshStaffMember(id);
+      return { success: true, data: member, outcome };
+    } catch (error) {
+      console.error('Error recording staff departure:', error);
+      toast.error(`Failed to record departure: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Bring a former staff member back (rehire, or a departure recorded by mistake)
+  const reinstateStaff = async (id, { enableLogin = true } = {}) => {
+    try {
+      const { data: outcome, error } = await supabase.rpc('reinstate_staff_member', {
+        p_staff_id: id,
+        p_enable_login: enableLogin
+      });
+
+      if (error) throw error;
+      const member = await refreshStaffMember(id);
+      return { success: true, data: member, outcome };
+    } catch (error) {
+      console.error('Error reinstating staff member:', error);
+      toast.error(`Failed to reinstate: ${error.message}`);
       return { success: false, error: error.message };
     }
   };
@@ -711,6 +759,7 @@ export const StaffProvider = ({ children }) => {
   return (
     <StaffContext.Provider value={{
       staff,
+      activeStaff: staff.filter(isCurrentStaff),
       schedules,
       timeEntries,
       trainingModules,
@@ -727,6 +776,8 @@ export const StaffProvider = ({ children }) => {
       addStaff,
       updateStaff,
       deleteStaff,
+      offboardStaff,
+      reinstateStaff,
       addSchedule,
       updateSchedule,
       deleteSchedule,

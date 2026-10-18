@@ -3,9 +3,10 @@ import { useStaff } from '../../context/StaffContext';
 import { FaPlus, FaEdit, FaTrash, FaExchangeAlt, FaCalendarAlt } from 'react-icons/fa';
 import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, parseISO } from 'date-fns';
 import ScheduleModal from './ScheduleModal';
+import { isCurrentStaff } from '../../utils/staffLifecycle';
 
 const StaffScheduler = () => {
-  const { staff, schedules, loading, fetchStaff, fetchSchedules, addSchedule, updateSchedule, deleteSchedule } = useStaff();
+  const { staff: allStaff, activeStaff, schedules, loading, fetchStaff, fetchSchedules, addSchedule, updateSchedule, deleteSchedule } = useStaff();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [weekStart, setWeekStart] = useState(startOfWeek(currentDate, { weekStartsOn: 0 }));
   const [weekEnd, setWeekEnd] = useState(endOfWeek(currentDate, { weekStartsOn: 0 }));
@@ -124,6 +125,10 @@ const StaffScheduler = () => {
     setSwapTarget(null);
     setShowSwapModal(false);
   };
+
+  // The roster lists current staff, plus anyone who left during or after the week being viewed
+  const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+  const staff = allStaff.filter(s => isCurrentStaff(s) || (s.end_date && s.end_date >= weekStartStr));
 
   // Filter departments from staff data
   const departments = [...new Set(staff.map(s => s.department))];
@@ -393,7 +398,7 @@ const StaffScheduler = () => {
           onClose={() => setIsModalOpen(false)}
           onSave={handleSaveSchedule}
           schedule={currentSchedule}
-          staff={staff}
+          staff={activeStaff}
         />
       )}
 
