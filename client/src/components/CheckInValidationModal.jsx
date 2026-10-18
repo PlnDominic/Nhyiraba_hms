@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { ID_TYPES, validateCheckIn } from '../services/operationsService';
+import DuplicateGuestHint from './DuplicateGuestHint';
 
 const POLICIES = [
   'Check-out time is 12:00 noon; late check-out may be charged.',
@@ -59,6 +60,7 @@ const CheckInValidationModal = ({ reservation, room, onCancel, onConfirm }) => {
         )}
 
         <div className="space-y-3">
+          <DuplicateGuestHint name={reservation.guest_name} phone={form.phone} email={form.email} />
           <div className="grid grid-cols-2 gap-3">
             <input aria-label="Phone" placeholder="Phone" value={form.phone} onChange={set('phone')} className={input} />
             <input aria-label="Email" placeholder="Email" value={form.email} onChange={set('email')} className={input} />

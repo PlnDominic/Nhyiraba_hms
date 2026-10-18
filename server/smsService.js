@@ -39,9 +39,25 @@ const templates = {
     `Hello ${d.guestName}, we did not see you for your reservation at ${HOTEL_NAME} on ${fmtDate(d.checkInDate)}, so it has been marked as a no-show. Please contact us to rebook.`,
   payment_received: (d) =>
     `Hello ${d.guestName}, we received your payment of ${money(d.amount)} at ${HOTEL_NAME}. Thank you!`,
+  arrival_reminder: (d) =>
+    `Hello ${d.guestName}, a reminder that your stay at ${HOTEL_NAME} begins on ${fmtDate(d.checkInDate)}${d.roomNumber ? ` (Room ${d.roomNumber})` : ''}. We look forward to welcoming you!`,
+  checkout_reminder: (d) =>
+    `Hello ${d.guestName}, a reminder that check-out at ${HOTEL_NAME} is at 12:00 noon on ${fmtDate(d.checkOutDate)}. Please contact reception if you need a late check-out.`,
+  payment_reminder: (d) =>
+    `Hello ${d.guestName}, you have an outstanding balance of ${money(d.amount)} at ${HOTEL_NAME}. Kindly settle it at reception. Thank you.`,
+  service_update: (d) =>
+    `Hello ${d.guestName}, update from ${HOTEL_NAME}: ${String(d.detail || '').trim()}`,
 };
 
+const MAX_CUSTOM_LENGTH = 320;
+
+// 'custom' lets staff write their own text (length-capped); everything else is a fixed template.
 const buildMessage = (event, data = {}) => {
+  if (event === 'custom') {
+    const text = String(data.message || '').trim();
+    return text && text.length <= MAX_CUSTOM_LENGTH ? text : null;
+  }
+  if (event === 'service_update' && !String(data.detail || '').trim()) return null;
   const tpl = templates[event];
   return tpl ? tpl({ guestName: 'Guest', ...data }) : null;
 };
