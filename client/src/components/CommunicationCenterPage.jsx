@@ -37,17 +37,9 @@ const TEMPLATES = {
   custom: { label: 'Custom message', fields: ['message'], hint: 'Your own text (max 320 characters).' }
 };
 const RETRYABLE = ['FAILED', 'REJECTD', 'NOT_DELIVERED', 'EXPIRED'];
-const STATUS_STYLE = {
-  DELIVERED: 'bg-emerald-100 text-emerald-800',
-  SUBMITTING: 'bg-slate-100 text-slate-700',
-  PENDING: 'bg-slate-100 text-slate-700',
-  SUBMITTED: 'bg-blue-100 text-blue-800',
-  QUEUED: 'bg-amber-100 text-amber-800',
-  FAILED: 'bg-red-100 text-red-800',
-  REJECTD: 'bg-red-100 text-red-800',
-  NOT_DELIVERED: 'bg-red-100 text-red-800',
-  PROHIBITED: 'bg-red-100 text-red-800',
-  EXPIRED: 'bg-red-100 text-red-800'
+const STATUS_TONE = {
+  DELIVERED: 'ok', SUBMITTED: 'info', QUEUED: 'warn',
+  FAILED: 'bad', REJECTD: 'bad', NOT_DELIVERED: 'bad', PROHIBITED: 'bad', EXPIRED: 'bad'
 };
 
 const CommunicationCenterPage = () => {
@@ -67,7 +59,6 @@ const CommunicationCenterPage = () => {
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState(null);
 
-  const panel = `rounded-2xl border p-5 shadow-sm ${dark ? 'border-slate-700 bg-slate-900/70 text-white' : 'border-slate-200 bg-white text-slate-900'}`;
   const profiles = useMemo(() => buildProfiles(guestList || []), [guestList]);
   const template = TEMPLATES[form.template];
 
@@ -122,98 +113,142 @@ const CommunicationCenterPage = () => {
 
   const retriedIds = useMemo(() => new Set(log.map((m) => m.retry_of).filter(Boolean)), [log]);
 
+  const templateLabel = (key) => TEMPLATES[key]?.label || String(key || '').replace(/_/g, ' ');
+  const when = (value) => new Date(value).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const detailRows = [
+    template.fields.includes('checkInDate') && ['Check-in', form.checkInDate],
+    template.fields.includes('roomNumber') && ['Room', form.roomNumber],
+    template.fields.includes('checkOutDate') && ['Check-out', form.checkOutDate],
+    template.fields.includes('amount') && ['Amount', form.amount && `GH₵${form.amount}`],
+    template.fields.includes('detail') && ['Update', form.detail]
+  ].filter(Boolean);
+  const credits = Math.max(1, Math.ceil(form.message.length / 160));
+
   return (
     <DashboardLayout activeLink="Communications" title="Communication Center">
-      <div className="space-y-6 pb-10">
-        {notice && <div role="status" className={`rounded-xl border px-4 py-3 text-sm ${notice.type === 'error' ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'}`}>{notice.message}</div>}
+      <div className={`cc-page${dark ? ' cc-page--dark' : ''} space-y-8 pb-12`}>
+        {notice && <div role="status" className={`rounded-xl border px-5 py-4 text-base ${notice.type === 'error' ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'}`}>{notice.message}</div>}
         <div>
-          <h1 className="text-2xl font-bold">Communication center</h1>
-          <p className="text-sm opacity-70">Send guest SMS and track delivery. Automatic messages (bookings, check-in/out) appear here too.</p>
+          <h1 className="text-3xl font-bold">Communication center</h1>
+          <p className="mt-1 text-base opacity-70">Send guest SMS and track delivery. Automatic messages (bookings, check-in/out) appear here too.</p>
         </div>
 
-        <section className={`cc-card${dark ? ' cc-card--dark' : ''}`} aria-labelledby="cc-title">
-          <header className="cc-head">
-            <span className="cc-head-icon"><Icon name="send" /></span>
-            <div>
-              <h2 id="cc-title" className="cc-title">New message</h2>
-              <p className="cc-sub">Send an SMS to a guest. Delivery status appears in the log below.</p>
-            </div>
-          </header>
+        <div className="cc-layout">
+          <section className="cc-card" aria-labelledby="cc-title">
+            <header className="cc-head">
+              <span className="cc-head-icon"><Icon name="send" /></span>
+              <div>
+                <h2 id="cc-title" className="cc-title">New message</h2>
+                <p className="cc-sub">Three quick steps: choose who, what, then the details.</p>
+              </div>
+            </header>
 
-          <form onSubmit={send}>
-            <div className="cc-body">
-              <div className="cc-grid">
-                <Field id="cc-guest" label="Existing guest" icon="user" span>
-                  <select id="cc-guest" defaultValue="" onChange={(e) => pickGuest(e.target.value)} className="cc-select">
-                    <option value="">Pick a guest to fill in their details…</option>
-                    {profiles.filter((p) => p.phones.length).map((p) => <option key={p.key} value={p.key}>{p.name} · +{p.phones[0]}</option>)}
-                  </select>
-                </Field>
-                <Field id="cc-phone" label="Phone number" icon="phone">
-                  <input id="cc-phone" type="tel" inputMode="tel" placeholder="024 123 4567" value={form.phone} onChange={set('phone')} className="cc-input" />
-                </Field>
-                <Field id="cc-name" label="Guest name" icon="user">
-                  <input id="cc-name" placeholder="e.g. Ama Boateng" value={form.guestName} onChange={set('guestName')} className="cc-input" />
-                </Field>
+            <form onSubmit={send}>
+              <div className="cc-section">
+                <h3 className="cc-step"><span className="cc-step-num">1</span>Who is it for?</h3>
+                <p className="cc-step-help">Pick an existing guest to fill this in, or type a number.</p>
+                <div className="cc-grid">
+                  <Field id="cc-guest" label="Existing guest" icon="user" span>
+                    <select id="cc-guest" defaultValue="" onChange={(e) => pickGuest(e.target.value)} className="cc-select">
+                      <option value="">Pick a guest to fill in their details…</option>
+                      {profiles.filter((p) => p.phones.length).map((p) => <option key={p.key} value={p.key}>{p.name} · +{p.phones[0]}</option>)}
+                    </select>
+                  </Field>
+                  <Field id="cc-phone" label="Phone number" icon="phone">
+                    <input id="cc-phone" type="tel" inputMode="tel" placeholder="024 123 4567" value={form.phone} onChange={set('phone')} className="cc-input" />
+                  </Field>
+                  <Field id="cc-name" label="Guest name" icon="user">
+                    <input id="cc-name" placeholder="e.g. Ama Boateng" value={form.guestName} onChange={set('guestName')} className="cc-input" />
+                  </Field>
+                </div>
               </div>
 
-              <div role="radiogroup" aria-label="Message type">
-                <span className="cc-section-label">Message type</span>
-                <div className="cc-chips">
+              <div className="cc-section">
+                <h3 className="cc-step"><span className="cc-step-num">2</span>What do you want to send?</h3>
+                <p className="cc-step-help">Choose a message type.</p>
+                <div className="cc-types" role="radiogroup" aria-label="Message type">
                   {Object.entries(TEMPLATES).map(([key, t]) => (
-                    <button key={key} type="button" role="radio" aria-checked={form.template === key} onClick={() => setForm((f) => ({ ...f, template: key }))} className="cc-chip">{t.label}</button>
+                    <button key={key} type="button" role="radio" aria-checked={form.template === key} onClick={() => setForm((f) => ({ ...f, template: key }))} className="cc-type">
+                      <b>{t.label}</b>
+                      <span>{t.hint}</span>
+                    </button>
                   ))}
                 </div>
               </div>
 
-              <div className="cc-grid">
-                {template.fields.includes('checkInDate') && <Field id="cc-in" label="Check-in date" icon="calendar"><input id="cc-in" type="date" value={form.checkInDate} onChange={set('checkInDate')} className="cc-input" /></Field>}
-                {template.fields.includes('roomNumber') && <Field id="cc-room" label="Room number (optional)" icon="bed"><input id="cc-room" placeholder="e.g. 4" value={form.roomNumber} onChange={set('roomNumber')} className="cc-input" /></Field>}
-                {template.fields.includes('checkOutDate') && <Field id="cc-out" label="Check-out date" icon="calendar"><input id="cc-out" type="date" value={form.checkOutDate} onChange={set('checkOutDate')} className="cc-input" /></Field>}
-                {template.fields.includes('amount') && <Field id="cc-amount" label="Amount (GH₵)" icon="cash"><input id="cc-amount" type="number" min="0" step="0.01" placeholder="0.00" value={form.amount} onChange={set('amount')} className="cc-input" /></Field>}
-                {template.fields.includes('detail') && <Field id="cc-detail" label="Update" icon="text" span><input id="cc-detail" placeholder="e.g. your laundry is ready for collection" value={form.detail} onChange={set('detail')} className="cc-input" /></Field>}
-                {template.fields.includes('message') && (
-                  <Field id="cc-message" label="Message" icon="text" span area>
-                    <textarea id="cc-message" rows={4} maxLength={320} placeholder="Type your message" value={form.message} onChange={set('message')} className="cc-textarea" />
-                    <div className={`cc-counter${form.message.length >= 320 ? ' is-max' : form.message.length >= 280 ? ' is-near' : ''}`}>{form.message.length}/320</div>
-                  </Field>
-                )}
+              <div className="cc-section">
+                <h3 className="cc-step"><span className="cc-step-num">3</span>Details</h3>
+                <p className="cc-step-help">{template.hint}</p>
+                <div className="cc-grid">
+                  {template.fields.includes('checkInDate') && <Field id="cc-in" label="Check-in date" icon="calendar"><input id="cc-in" type="date" value={form.checkInDate} onChange={set('checkInDate')} className="cc-input" /></Field>}
+                  {template.fields.includes('roomNumber') && <Field id="cc-room" label="Room number (optional)" icon="bed"><input id="cc-room" placeholder="e.g. 4" value={form.roomNumber} onChange={set('roomNumber')} className="cc-input" /></Field>}
+                  {template.fields.includes('checkOutDate') && <Field id="cc-out" label="Check-out date" icon="calendar"><input id="cc-out" type="date" value={form.checkOutDate} onChange={set('checkOutDate')} className="cc-input" /></Field>}
+                  {template.fields.includes('amount') && <Field id="cc-amount" label="Amount (GH₵)" icon="cash"><input id="cc-amount" type="number" min="0" step="0.01" placeholder="0.00" value={form.amount} onChange={set('amount')} className="cc-input" /></Field>}
+                  {template.fields.includes('detail') && <Field id="cc-detail" label="Update" icon="text" span><input id="cc-detail" placeholder="e.g. your laundry is ready for collection" value={form.detail} onChange={set('detail')} className="cc-input" /></Field>}
+                  {template.fields.includes('message') && (
+                    <Field id="cc-message" label="Message" icon="text" span area>
+                      <textarea id="cc-message" rows={5} maxLength={320} placeholder="Type your message" value={form.message} onChange={set('message')} className="cc-textarea" />
+                      <div className={`cc-counter${form.message.length >= 320 ? ' is-max' : form.message.length >= 280 ? ' is-near' : ''}`}>{form.message.length}/320</div>
+                    </Field>
+                  )}
+                </div>
               </div>
 
-              <p className="cc-hint"><Icon name="info" />{template.hint}</p>
-            </div>
+              <footer className="cc-foot">
+                <small>Messages longer than 160 characters use more than one SMS credit.</small>
+                <button type="submit" disabled={sending} className="cc-send"><Icon name="send" />{sending ? 'Sending…' : 'Send SMS'}</button>
+              </footer>
+            </form>
+          </section>
 
-            <footer className="cc-foot">
-              <small>Messages longer than 160 characters use more than one SMS credit.</small>
-              <button type="submit" disabled={sending} className="cc-send"><Icon name="send" />{sending ? 'Sending…' : 'Send SMS'}</button>
-            </footer>
-          </form>
-        </section>
-
-        <section className={panel}>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Message log</h2>
-            <button onClick={loadLog} disabled={loadingLog} className="rounded-lg border px-3 py-1.5 text-sm font-semibold">{loadingLog ? 'Refreshing…' : 'Refresh status'}</button>
-          </div>
-          {logError && <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Could not load the log: {logError}. Has the SMS tracking migration been run?</div>}
-          {!logError && log.length === 0 && !loadingLog && <p className="text-sm opacity-60">No messages yet.</p>}
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead><tr className="border-b"><th className="px-2 py-2">Sent</th><th className="px-2 py-2">To</th><th className="px-2 py-2">Type</th><th className="px-2 py-2">Status</th><th className="px-2 py-2">Message</th><th className="px-2 py-2" /></tr></thead>
-              <tbody>
-                {log.map((m) => (
-                  <tr key={m.id} className="border-b align-top last:border-0">
-                    <td className="whitespace-nowrap px-2 py-2">{new Date(m.created_at).toLocaleString()}</td>
-                    <td className="px-2 py-2">{m.phone}</td>
-                    <td className="px-2 py-2">{m.event}{m.retry_of ? ' (retry)' : ''}</td>
-                    <td className="px-2 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_STYLE[m.status] || 'bg-slate-100 text-slate-700'}`}>{m.status}</span>{m.error && <div className="mt-1 text-xs text-red-600">{m.error}</div>}</td>
-                    <td className="max-w-xs px-2 py-2">{m.message}</td>
-                    <td className="px-2 py-2">{RETRYABLE.includes(m.status) && !retriedIds.has(m.id) && <button onClick={() => retry(m)} className="rounded-md bg-amber-600 px-3 py-1 text-xs font-semibold text-white">Retry</button>}</td>
-                  </tr>
+          <aside className="cc-card cc-side" aria-label="Message summary">
+            <div className="cc-side-body">
+              <h3>Summary</h3>
+              <dl className="cc-sum">
+                <div><dt>To</dt><dd className={form.guestName || form.phone ? '' : 'is-empty'}>{form.guestName || form.phone ? <>{form.guestName || 'Guest'}{form.phone && <><br />{form.phone}</>}</> : 'Nobody selected yet'}</dd></div>
+                <div><dt>Type</dt><dd>{template.label}</dd></div>
+                {detailRows.map(([label, value]) => (
+                  <div key={label}><dt>{label}</dt><dd className={value ? '' : 'is-empty'}>{value || 'Not filled in yet'}</dd></div>
                 ))}
-              </tbody>
-            </table>
+              </dl>
+              {form.template === 'custom' && form.message && (
+                <div>
+                  <dt className="cc-sum-title" style={{ fontSize: 12, fontWeight: 650, letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.7, marginBottom: 8 }}>Preview</dt>
+                  <div className="cc-bubble">{form.message}</div>
+                  <p className="cc-note" style={{ marginTop: 10 }}>{form.message.length} characters · {credits} SMS credit{credits !== 1 ? 's' : ''}</p>
+                </div>
+              )}
+              <p className="cc-note"><Icon name="info" /><span>Delivery status appears in the message log below once the SMS is sent.</span></p>
+            </div>
+          </aside>
+        </div>
+
+        <section className="cc-card cc-log" aria-labelledby="cc-log-title">
+          <div className="cc-log-head">
+            <h2 id="cc-log-title">Message log</h2>
+            <button type="button" onClick={loadLog} disabled={loadingLog} className="cc-btn">{loadingLog ? 'Refreshing…' : 'Refresh status'}</button>
           </div>
+          {logError && <div className="cc-warnbox">Could not load the log: {logError}. Has the SMS tracking migration been run?</div>}
+          {!logError && log.length === 0 && !loadingLog && <div className="cc-empty">No messages yet.</div>}
+          <ul className="cc-log-list">
+            {log.map((m) => (
+              <li key={m.id} className="cc-log-item">
+                <div className="cc-log-who">
+                  <b>{m.phone}</b>
+                  <span>{when(m.created_at)}</span>
+                  <span>{templateLabel(m.event)}{m.retry_of ? ' · retry' : ''}</span>
+                </div>
+                <div>
+                  <div className="cc-log-msg">{m.message}</div>
+                  <div className="cc-log-meta">
+                    <span className="cc-badge" data-tone={STATUS_TONE[m.status] || 'neutral'}>{m.status}</span>
+                    {m.error && <span className="cc-log-error">{m.error}</span>}
+                  </div>
+                </div>
+                <div>{RETRYABLE.includes(m.status) && !retriedIds.has(m.id) && <button type="button" onClick={() => retry(m)} className="cc-retry">Retry</button>}</div>
+              </li>
+            ))}
+          </ul>
         </section>
       </div>
     </DashboardLayout>
