@@ -6,6 +6,7 @@ import {
   createReservation as createReservationService,
   updateReservation as updateReservationService
 } from '../services/reservationService';
+import { sendSmsNotification, reservationSmsData } from '../services/smsService';
 import {
   validateRoomAvailability,
   markReservationNoShow,
@@ -375,6 +376,8 @@ export const RoomReservationProvider = ({ children }) => {
         if (error) {
           throw error;
         }
+
+        sendSmsNotification('checked_out', activeReservation.guest_phone, reservationSmsData(activeReservation));
       }
 
       return { success: true };
@@ -468,6 +471,8 @@ export const RoomReservationProvider = ({ children }) => {
       // Update the local reservation with the real ID
       dispatch({ type: 'UPDATE_RESERVATION', payload: { ...newReservation, id: data.id } });
 
+      sendSmsNotification('reservation_created', reservationData.guest_phone, reservationSmsData(reservationData));
+
       return { success: true, data };
     } catch (error) {
       console.error('Error creating reservation:', error);
@@ -510,6 +515,8 @@ export const RoomReservationProvider = ({ children }) => {
         }
       });
 
+      sendSmsNotification('reservation_cancelled', reservation.guest_phone, reservationSmsData(reservation, { fee }));
+
       return { success: true };
     } catch (error) {
       console.error('Error canceling reservation:', error);
@@ -526,6 +533,7 @@ export const RoomReservationProvider = ({ children }) => {
     if (result.error) return { success: false, error: result.error.message };
     dispatch({ type: 'UPDATE_RESERVATION', payload: result.data });
     dispatch({ type: 'UPDATE_ROOM_STATUS', payload: { roomId: reservation.room_id, status: 'Available' } });
+    sendSmsNotification('no_show', reservation.guest_phone, reservationSmsData(reservation));
     return { success: true, data: result.data };
   };
 
@@ -536,6 +544,10 @@ export const RoomReservationProvider = ({ children }) => {
     dispatch({ type: 'UPDATE_RESERVATION', payload: result.data });
     dispatch({ type: 'UPDATE_ROOM_STATUS', payload: { roomId: reservation.room_id, status: 'Available' } });
     dispatch({ type: 'UPDATE_ROOM_STATUS', payload: { roomId: room.id, status: 'Reserved' } });
+    sendSmsNotification('reservation_updated', reservation.guest_phone, {
+      ...reservationSmsData(reservation),
+      roomNumber: room.room_number || result.data?.room_number
+    });
     return { success: true, data: result.data };
   };
 
@@ -571,6 +583,14 @@ export const RoomReservationProvider = ({ children }) => {
       if (error) {
         throw error;
       }
+
+      sendSmsNotification('reservation_updated', reservationData.phoneNumber || reservationData.guest_phone, {
+        guestName: reservationData.guestName || reservationData.guest_name,
+        roomNumber: reservationData.roomNumber || reservationData.room_number,
+        checkInDate: reservationData.checkInDate || reservationData.check_in_date,
+        checkOutDate: reservationData.checkOutDate || reservationData.check_out_date,
+        roomRate: reservationData.roomPrice || reservationData.room_rate
+      });
 
       return { success: true };
     } catch (error) {

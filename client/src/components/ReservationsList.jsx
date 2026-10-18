@@ -9,6 +9,7 @@ import supabase from '../supabaseClient';
 import ReservationViewModal from './ReservationViewModal';
 import ReservationEditModal from './ReservationEditModal';
 import { deleteReservation } from '../services/reservationService';
+import { sendSmsNotification, reservationSmsData } from '../services/smsService';
 
 const ReservationsList = () => {
   const { theme } = useTheme();
@@ -277,6 +278,8 @@ const ReservationsList = () => {
           }
         });
         document.dispatchEvent(updateOccupancyEvent);
+
+        sendSmsNotification('checked_in', reservation.guest_phone, reservationSmsData(reservation));
 
         alert('Guest checked in successfully and moved to Guest Directory!');
       } catch (error) {
