@@ -1,10 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import Modal from 'react-modal';
+import React, { useState } from 'react';
 import { useTheme } from '../context/ThemeContext';
-import DatePicker from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
-import '../styles/AppleModal.css';
-import { Group, Row, Counter, CloseIcon } from './ui/AppleForm';
+import { StepModal, Step, Field, Counter, RoomCards, DateInput, ReviewList } from './ui/StepModal';
 import { useRoomReservation } from '../context/RoomReservationContext';
 
 const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
@@ -12,9 +8,6 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
   const isDarkMode = theme === 'dark';
   const { createReservation, rooms } = useRoomReservation();
   
-  useEffect(() => {
-    Modal.setAppElement('body');
-  }, []);
 
   // Initial form state
   const [formData, setFormData] = useState({
@@ -33,6 +26,7 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
 
   // Error state
   const [errors, setErrors] = useState({});
+  const [step, setStep] = useState(0);
 
   // Handle form field changes
   const handleChange = (e) => {
@@ -150,109 +144,121 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
       paymentMethod: 'Credit Card'
     });
     setErrors({});
+    setStep(0);
     onRequestClose();
   };
 
-  const mode = isDarkMode ? 'dark' : 'light';
-  const dp = isDarkMode ? 'apple-datepicker-dark' : undefined;
   const setCount = (name) => (value) => setFormData(prev => ({ ...prev, [name]: value }));
   const availableRooms = rooms.filter(room => room.status === 'Available').sort((a, b) => a.id - b.id);
+  const selectedRoom = rooms.find(room => String(room.id) === String(formData.roomNumber));
+  const nights = Math.max(1, Math.ceil((formData.checkOutDate - formData.checkInDate) / 86400000) || 1);
+  const fmt = (d) => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  const money = (n) => `₵${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  const STEP_KEYS = [['guestName', 'email'], ['roomNumber', 'checkInDate', 'checkOutDate'], []];
+  const LAST = STEP_KEYS.length - 1;
 
-  if (!isOpen) return null;
+  const goNext = () => {
+    const all = validateForm();
+    const stepErrors = {};
+    STEP_KEYS[step].forEach(k => { if (all[k]) stepErrors[k] = all[k]; });
+    setErrors(stepErrors);
+    if (Object.keys(stepErrors).length === 0) setStep(step + 1);
+  };
 
-  return (
-    <Modal
-      isOpen={isOpen}
-      onRequestClose={handleModalClose}
-      contentLabel="New Reservation"
-      closeTimeoutMS={250}
-      overlayClassName="apple-overlay"
-      className={`apple-ui apple-sheet apple-sheet--${mode}`}
-      style={{ content: { maxWidth: 1240 } }}
-    >
-      <div className="flex items-start justify-between px-5 pt-5 pb-3">
-        <div>
-          <h2 className="apple-title">New Reservation</h2>
-          <p className="apple-subtitle">Create a booking for an upcoming stay.</p>
-        </div>
-        <button type="button" className="apple-close" onClick={handleModalClose} aria-label="Close"><CloseIcon /></button>
-      </div>
+  const submit = () => handleSubmit({ preventDefault: () => {} });
 
-      <form id="new-reservation-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 pt-2 pb-4 space-y-6" style={{ overflowX: 'hidden' }}>
-        <div>
-          <p className="apple-section-title">Guest</p>
-          <Group mode={mode}>
-            <Row label="Full name" error={errors.guestName}>
-              <input className="apple-field" type="text" name="guestName" value={formData.guestName} onChange={handleChange} placeholder="Required" autoComplete="off" autoFocus />
-            </Row>
-            <Row label="Email" error={errors.email}>
-              <input className="apple-field" type="email" name="email" value={formData.email} onChange={handleChange} placeholder="Required" autoComplete="off" />
-            </Row>
-            <Row label="Phone">
-              <input className="apple-field" type="tel" name="phoneNumber" value={formData.phoneNumber} onChange={handleChange} placeholder="Optional" autoComplete="off" />
-            </Row>
-            <Row label="Adults">
-              <span style={{ marginLeft: 'auto', opacity: 0.6 }}>{formData.adults}</span>
-              <Counter name="adults" value={formData.adults} min={1} max={5} onChange={setCount('adults')} />
-            </Row>
-            <Row label="Children">
-              <span style={{ marginLeft: 'auto', opacity: 0.6 }}>{formData.children}</span>
-              <Counter name="children" value={formData.children} min={0} max={4} onChange={setCount('children')} />
-            </Row>
-          </Group>
-          {errors.guestName && <p className="apple-error">{errors.guestName}</p>}
-          {errors.email && <p className="apple-error">{errors.email}</p>}
-        </div>
-
-        <div>
-          <p className="apple-section-title">Stay</p>
-          <Group mode={mode}>
-            <Row label="Room type">
-              <select className="apple-field" name="roomType" value={formData.roomType} onChange={handleChange}>
+  const renderStep = () => {
+    if (step === 0) {
+      return (
+        <Step title="Guest details" lead="Who is the booking for?">
+          <div className="sm-grid">
+            <Field label="Full name" error={errors.guestName}>
+              <input className="sm-input" type="text" name="guestName" value={formData.guestName} onChange={handleChange} placeholder="Enter full name" autoComplete="off" autoFocus />
+            </Field>
+            <Field label="Email address" error={errors.email}>
+              <input className="sm-input" type="email" name="email" value={formData.email} onChange={handleChange} placeholder="email@example.com" autoComplete="off" />
+            </Field>
+            <Field label="Phone (optional)">
+              <input className="sm-input" type="tel" name="phoneNumber" value={formData.phoneNumber} onChange={handleChange} placeholder="Enter phone number" autoComplete="off" />
+            </Field>
+            <Field label="Room type">
+              <select className="sm-select" name="roomType" value={formData.roomType} onChange={handleChange}>
                 {['Standard', 'Deluxe', 'Suite', 'Executive', 'Presidential'].map(t => <option key={t} value={t}>{t}</option>)}
               </select>
-            </Row>
-            <Row label="Room" error={errors.roomNumber}>
-              <select className="apple-field" name="roomNumber" value={formData.roomNumber} onChange={handleChange}>
-                <option value="">Choose…</option>
-                {availableRooms.map(room => <option key={room.id} value={room.id}>{room.id} · {room.type}</option>)}
-              </select>
-            </Row>
-            <Row label="Check-in" error={errors.checkInDate}>
-              <DatePicker selected={formData.checkInDate} onChange={(d) => handleDateChange('checkInDate', d)} className="apple-field" calendarClassName={dp} popperPlacement="bottom-end" minDate={new Date()} dateFormat="EEE, d MMM yyyy" />
-            </Row>
-            <Row label="Check-out" error={errors.checkOutDate}>
-              <DatePicker selected={formData.checkOutDate} onChange={(d) => handleDateChange('checkOutDate', d)} className="apple-field" calendarClassName={dp} popperPlacement="bottom-end" minDate={new Date(formData.checkInDate.getTime() + 86400000)} dateFormat="EEE, d MMM yyyy" />
-            </Row>
-          </Group>
-          {errors.roomNumber && <p className="apple-error">{errors.roomNumber}</p>}
-          {errors.checkInDate && <p className="apple-error">{errors.checkInDate}</p>}
-          {errors.checkOutDate && <p className="apple-error">{errors.checkOutDate}</p>}
+            </Field>
+            <Field label="Adults"><Counter name="adults" value={formData.adults} min={1} max={5} onChange={setCount('adults')} /></Field>
+            <Field label="Children"><Counter name="children" value={formData.children} min={0} max={4} onChange={setCount('children')} /></Field>
+          </div>
+        </Step>
+      );
+    }
+    if (step === 1) {
+      return (
+        <Step title="Room & dates" lead="Choose an available room and the length of stay.">
+          {errors.roomNumber && <p className="sm-error" style={{ marginBottom: 12 }}>{errors.roomNumber}</p>}
+          <RoomCards
+            rooms={availableRooms}
+            selectedId={formData.roomNumber}
+            onSelect={(id) => handleChange({ target: { name: 'roomNumber', value: String(id) } })}
+            label={(room) => `Room ${room.room_number || room.id}`}
+            meta={(room) => room.type}
+            price={(room) => Number(room.price) || 0}
+          />
+          <div className="sm-grid">
+            <Field label="Check-in" error={errors.checkInDate}>
+              <DateInput selected={formData.checkInDate} onChange={(date) => handleDateChange('checkInDate', date)} minDate={new Date()} />
+            </Field>
+            <Field label="Check-out" error={errors.checkOutDate}>
+              <DateInput selected={formData.checkOutDate} onChange={(date) => handleDateChange('checkOutDate', date)} minDate={new Date(formData.checkInDate.getTime() + 86400000)} />
+            </Field>
+          </div>
+        </Step>
+      );
+    }
+    return (
+      <Step title="Payment & review" lead="Add payment details and confirm the booking.">
+        <div className="sm-grid" style={{ marginBottom: 24 }}>
+          <Field label="Payment method">
+            <select className="sm-select" name="paymentMethod" value={formData.paymentMethod} onChange={handleChange}>
+              {['Credit Card', 'Debit Card', 'Cash', 'Bank Transfer', 'Mobile Money'].map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </Field>
+          <Field label="Special requests" span>
+            <textarea className="sm-textarea" name="specialRequests" value={formData.specialRequests} onChange={handleChange} placeholder="Any special requirements or notes" />
+          </Field>
         </div>
+        <ReviewList rows={[
+          ['Guest', formData.guestName],
+          ['Email', formData.email],
+          ['Room', selectedRoom ? `Room ${selectedRoom.room_number || selectedRoom.id} · ${selectedRoom.type}` : '—'],
+          ['Dates', `${fmt(formData.checkInDate)} – ${fmt(formData.checkOutDate)} (${nights} night${nights !== 1 ? 's' : ''})`],
+          ['Guests', `${formData.adults} adult${formData.adults !== 1 ? 's' : ''}, ${formData.children} child${formData.children !== 1 ? 'ren' : ''}`]
+        ]} />
+        {errors.general && <div role="alert" className="sm-alert">{errors.general}</div>}
+      </Step>
+    );
+  };
 
-        <div>
-          <p className="apple-section-title">Payment & notes</p>
-          <Group mode={mode}>
-            <Row label="Payment">
-              <select className="apple-field" name="paymentMethod" value={formData.paymentMethod} onChange={handleChange}>
-                {['Credit Card', 'Debit Card', 'Cash', 'Bank Transfer', 'Mobile Money'].map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </Row>
-            <Row align="flex-start">
-              <textarea className="apple-field apple-field--area" name="specialRequests" value={formData.specialRequests} onChange={handleChange} rows="3" placeholder="Special requests" />
-            </Row>
-          </Group>
-        </div>
-
-        {errors.general && (
-          <div role="alert" className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(255,59,48,0.12)', color: '#ff3b30' }}>{errors.general}</div>
-        )}
-      </form>
-
-<div className="px-5 pb-5 pt-2 apple-footer">
-        <button type="button" className="apple-btn apple-btn--secondary" onClick={handleModalClose}>Cancel</button><button type="submit" form="new-reservation-form" className="apple-btn apple-btn--primary">Create Reservation</button>
-      </div>
-    </Modal>
+  return (
+    <StepModal
+      isOpen={isOpen}
+      onClose={handleModalClose}
+      isDarkMode={isDarkMode}
+      title="New reservation"
+      steps={['Guest', 'Room & dates', 'Payment & review']}
+      current={step}
+      recap={[
+        formData.guestName.trim() && { label: 'Guest', value: formData.guestName.trim() },
+        selectedRoom && { label: 'Room', value: `Room ${selectedRoom.room_number || selectedRoom.id}` }
+      ].filter(Boolean)}
+      total={selectedRoom && Number(selectedRoom.price) ? { label: `${nights} night${nights !== 1 ? 's' : ''} · Total`, value: money(Number(selectedRoom.price) * nights) } : null}
+      onBack={() => setStep(Math.max(0, step - 1))}
+      onNext={step === LAST ? submit : goNext}
+      nextLabel={step === LAST ? 'Create reservation' : 'Continue'}
+      finalStep={step === LAST}
+    >
+      {renderStep()}
+    </StepModal>
   );
 };
 

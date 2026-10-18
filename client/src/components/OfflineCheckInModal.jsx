@@ -2,64 +2,42 @@ import React, { useState, useEffect } from 'react';
 import { format, parseISO } from 'date-fns';
 import { useTheme } from '../context/ThemeContext';
 import { useOfflineRoomReservation } from '../context/OfflineRoomReservationContext';
-import DatePicker from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
-import '../styles/AppleModal.css';
-import { Group, Row, CloseIcon } from './ui/AppleForm';
+import { StepModal, Step, Field, RoomCards, DateInput, ReviewList } from './ui/StepModal';
 
 // Two uses: from a room card (roomId + onCheckIn) it checks a named guest into that
 // room; from the Guests page (onAddGuest, no room) it also asks for the room and phone.
 const OfflineCheckInModal = ({ isOpen, onClose, onCheckIn, onAddGuest, roomId }) => {
   const { theme } = useTheme();
   const isDarkMode = theme === 'dark';
-  const mode = isDarkMode ? 'dark' : 'light';
-  const toDate = (str) => parseISO(str);
-  const toStr = (date) => format(date, 'yyyy-MM-dd');
   const guestMode = roomId === undefined || roomId === null;
   const { rooms } = useOfflineRoomReservation();
   const availableRooms = (rooms || []).filter(r => r.status === 'Available');
+
+  const toDate = (str) => parseISO(str);
+  const toStr = (date) => format(date, 'yyyy-MM-dd');
+  const today = () => new Date().toISOString().split('T')[0];
+  const tomorrow = () => new Date(Date.now() + 86400000).toISOString().split('T')[0];
+
+  const [step, setStep] = useState(0);
   const [guestName, setGuestName] = useState('');
   const [phone, setPhone] = useState('');
   const [selectedRoom, setSelectedRoom] = useState('');
-  const [checkInDate, setCheckInDate] = useState(new Date().toISOString().split('T')[0]);
+  const [errors, setErrors] = useState({});
+  const [checkInDate, setCheckInDate] = useState(today());
+  const [checkOutDate, setCheckOutDate] = useState(tomorrow());
 
-  // Calculate default checkout date
-  const defaultCheckOut = new Date();
-  defaultCheckOut.setDate(defaultCheckOut.getDate() + 1);
-  const [checkOutDate, setCheckOutDate] = useState(defaultCheckOut.toISOString().split('T')[0]);
-
+  // Start every check-in from a clean form
   useEffect(() => {
-    if (!isOpen) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!guestName.trim()) return;
-    if (guestMode) {
-      if (!selectedRoom) return;
-      const room = availableRooms.find(r => String(r.id) === String(selectedRoom));
-      onAddGuest({
-        name: guestName.trim(),
-        phone,
-        room: Number(selectedRoom),
-        room_name: room ? `Room ${room.room_number}` : undefined,
-        checkIn: checkInDate,
-        checkOut: checkOutDate,
-        status: 'Checked In'
-      });
+    if (isOpen) {
+      setStep(0);
       setGuestName('');
       setPhone('');
       setSelectedRoom('');
-      return;
+      setErrors({});
+      setCheckInDate(today());
+      setCheckOutDate(tomorrow());
     }
-    onCheckIn(roomId, guestName, checkInDate, checkOutDate);
-    onClose();
-  };
+  }, [isOpen]);
 
   const handleCheckInChange = (date) => {
     if (!date) return;
@@ -69,60 +47,117 @@ const OfflineCheckInModal = ({ isOpen, onClose, onCheckIn, onAddGuest, roomId })
   };
 
   const nights = Math.max(1, Math.round((toDate(checkOutDate) - toDate(checkInDate)) / 86400000) || 1);
+  const fmt = (str) => toDate(str).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  const room = availableRooms.find(r => String(r.id) === String(selectedRoom));
+  const roomLabel = guestMode ? (room ? `Room ${room.room_number}` : '—') : `Room ${roomId}`;
+
+  const validateStep = () => {
+    const next = {};
+    if (step === 0 && !guestName.trim()) next.guestName = 'Guest name is required';
+    if (step === 1 && guestMode && !selectedRoom) next.room = 'Please choose a room';
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
+
+  const goNext = () => { if (validateStep()) setStep(step + 1); };
+
+  const submit = () => {
+    if (guestMode) {
+      if (!guestName.trim() || !selectedRoom) return;
+      onAddGuest({
+        name: guestName.trim(),
+        phone,
+        room: Number(selectedRoom),
+        room_name: room ? `Room ${room.room_number}` : undefined,
+        checkIn: checkInDate,
+        checkOut: checkOutDate,
+        status: 'Checked In'
+      });
+      return;
+    }
+    onCheckIn(roomId, guestName, checkInDate, checkOutDate);
+    onClose();
+  };
+
+  const steps = guestMode ? ['Guest', 'Room & dates', 'Review'] : ['Guest', 'Stay & confirm'];
+  const last = step === steps.length - 1;
+
+  const renderStep = () => {
+    if (step === 0) {
+      return (
+        <Step title="Guest details" lead={guestMode ? 'Register the arriving guest.' : `Who is checking in to Room ${roomId}?`}>
+          <div className="sm-grid">
+            <Field label="Full name" error={errors.guestName} span={!guestMode}>
+              <input className="sm-input" type="text" value={guestName} onChange={(e) => { setGuestName(e.target.value); setErrors({}); }} placeholder="Enter guest name" autoComplete="off" autoFocus />
+            </Field>
+            {guestMode && (
+              <Field label="Phone (optional)">
+                <input className="sm-input" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Enter phone number" autoComplete="off" />
+              </Field>
+            )}
+          </div>
+        </Step>
+      );
+    }
+    if (step === 1) {
+      return (
+        <Step title={guestMode ? 'Room & dates' : 'Stay & confirm'} lead={guestMode ? 'Pick an available room for this stay.' : 'Set the dates and confirm the check-in.'}>
+          {guestMode && errors.room && <p className="sm-error" style={{ marginBottom: 12 }}>{errors.room}</p>}
+          {guestMode && (
+            <RoomCards
+              rooms={availableRooms}
+              selectedId={selectedRoom}
+              onSelect={(id) => { setSelectedRoom(String(id)); setErrors({}); }}
+              label={(r) => `Room ${r.room_number}`}
+              meta={(r) => r.room_type || 'Room'}
+              price={(r) => Number(r.price_per_night) || 0}
+            />
+          )}
+          <div className="sm-grid" style={{ marginBottom: guestMode ? 0 : 24 }}>
+            <Field label="Check-in"><DateInput selected={toDate(checkInDate)} onChange={handleCheckInChange} /></Field>
+            <Field label="Check-out"><DateInput selected={toDate(checkOutDate)} onChange={(date) => date && setCheckOutDate(toStr(date))} minDate={new Date(toDate(checkInDate).getTime() + 86400000)} /></Field>
+          </div>
+          {!guestMode && (
+            <ReviewList rows={[
+              ['Guest', guestName.trim()],
+              ['Room', roomLabel],
+              ['Dates', `${fmt(checkInDate)} – ${fmt(checkOutDate)} (${nights} night${nights !== 1 ? 's' : ''})`]
+            ]} />
+          )}
+        </Step>
+      );
+    }
+    return (
+      <Step title="Review & check in" lead="Confirm the details before checking the guest in.">
+        <ReviewList rows={[
+          ['Guest', guestName.trim()],
+          ['Phone', phone || '—'],
+          ['Room', roomLabel],
+          ['Dates', `${fmt(checkInDate)} – ${fmt(checkOutDate)} (${nights} night${nights !== 1 ? 's' : ''})`]
+        ]} />
+      </Step>
+    );
+  };
 
   return (
-    <div className="apple-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={`apple-ui apple-sheet apple-sheet--${mode}`} style={{ maxWidth: 1080 }} role="dialog" aria-modal="true" aria-label={guestMode ? 'Guest check-in' : `Check in room ${roomId}`}>
-        <div className="flex items-start justify-between px-5 pt-5 pb-3">
-          <div>
-            <h2 className="apple-title">{guestMode ? 'Guest Check-In' : `Check In · Room ${roomId}`}</h2>
-            <p className="apple-subtitle">{guestMode ? 'Register an arriving guest and assign a room.' : 'Register the guest arriving in this room.'}</p>
-          </div>
-          <button type="button" className="apple-close" onClick={onClose} aria-label="Close"><CloseIcon /></button>
-        </div>
-
-        <form id="room-check-in-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 pt-2 pb-4 space-y-6" style={{ overflowX: 'hidden' }}>
-          <div>
-            <p className="apple-section-title">Guest</p>
-            <Group mode={mode}>
-              <Row label="Full name">
-                <input className="apple-field" type="text" value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="Required" autoComplete="off" autoFocus required />
-              </Row>
-              {guestMode && (
-                <Row label="Phone">
-                  <input className="apple-field" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Optional" autoComplete="off" />
-                </Row>
-              )}
-            </Group>
-          </div>
-
-          <div>
-            <p className="apple-section-title">Stay</p>
-            <Group mode={mode}>
-              {guestMode && (
-                <Row label="Room">
-                  <select className="apple-field" value={selectedRoom} onChange={(e) => setSelectedRoom(e.target.value)} required>
-                    <option value="">Choose…</option>
-                    {availableRooms.map(r => <option key={r.id} value={r.id}>Room {r.room_number}</option>)}
-                  </select>
-                </Row>
-              )}
-              <Row label="Check-in">
-                <DatePicker selected={toDate(checkInDate)} onChange={handleCheckInChange} className="apple-field" calendarClassName={isDarkMode ? 'apple-datepicker-dark' : undefined} dateFormat="EEE, d MMM yyyy" popperPlacement="bottom-end" />
-              </Row>
-              <Row label="Check-out">
-                <DatePicker selected={toDate(checkOutDate)} onChange={(date) => date && setCheckOutDate(toStr(date))} className="apple-field" calendarClassName={isDarkMode ? 'apple-datepicker-dark' : undefined} dateFormat="EEE, d MMM yyyy" popperPlacement="bottom-end" minDate={new Date(toDate(checkInDate).getTime() + 86400000)} />
-              </Row>
-            </Group>
-            <p className="apple-footnote">{nights} night{nights !== 1 ? 's' : ''}</p>
-          </div>
-        </form>
-
-<div className="px-5 pb-5 pt-2 apple-footer">
-          <button type="button" className="apple-btn apple-btn--secondary" onClick={onClose}>Cancel</button><button type="submit" form="room-check-in-form" className="apple-btn apple-btn--primary">Check In</button>
-        </div>
-      </div>
-    </div>
+    <StepModal
+      isOpen={isOpen}
+      onClose={onClose}
+      isDarkMode={isDarkMode}
+      title={guestMode ? 'Guest check-in' : `Check in · Room ${roomId}`}
+      steps={steps}
+      current={step}
+      recap={[
+        guestName.trim() && { label: 'Guest', value: guestName.trim() },
+        (guestMode ? room : true) && { label: 'Room', value: roomLabel }
+      ].filter(Boolean)}
+      onBack={() => setStep(Math.max(0, step - 1))}
+      onNext={last ? submit : goNext}
+      nextLabel={last ? 'Check in' : 'Continue'}
+      finalStep={last}
+    >
+      {renderStep()}
+    </StepModal>
   );
 };
 
