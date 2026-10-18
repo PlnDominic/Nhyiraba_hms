@@ -143,3 +143,104 @@ select.apple-field { text-align-last: right; cursor: pointer; padding-right: 2px
 @keyframes appleSheetIn { from { opacity: 0; transform: translateY(24px) scale(0.96); } to { opacity: 1; transform: none; } }
 @keyframes appleStepIn { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .apple-sheet, .apple-step, .apple-overlay { animation: none; } }
+
+
+/* ===== Premium / large presentation ===== */
+.apple-overlay { padding: 24px; background: rgba(0, 0, 0, 0.42); -webkit-backdrop-filter: blur(28px) saturate(150%); backdrop-filter: blur(28px) saturate(150%); }
+.apple-sheet {
+  max-height: calc(100vh - 48px);
+  border-radius: 32px;
+  box-shadow: 0 50px 140px rgba(0, 0, 0, 0.38), 0 12px 32px rgba(0, 0, 0, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.14);
+}
+.apple-sheet--light { background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(245, 245, 247, 0.96) 100%); }
+.apple-sheet--dark { background: linear-gradient(180deg, rgba(44, 44, 46, 0.96) 0%, rgba(28, 28, 30, 0.96) 100%); }
+
+/* generous gutters (beats Tailwind's px-5 / pt-5 / pb-5 used inside the sheet) */
+.apple-sheet > .px-5, .apple-sheet > form.px-5 { padding-left: 56px; padding-right: 56px; }
+.apple-sheet > .pt-5 { padding-top: 40px; }
+.apple-sheet > .pb-5 { padding-bottom: 40px; }
+.apple-sheet > .pb-3 { padding-bottom: 20px; }
+.apple-sheet > .pt-2 { padding-top: 12px; }
+.apple-sheet > .pb-4 { padding-bottom: 28px; }
+
+/* large title */
+.apple-title { font-size: 40px; line-height: 1.05; font-weight: 700; letter-spacing: -0.035em; margin: 0; }
+.apple-subtitle { margin-top: 8px; font-size: 17px; color: rgba(60, 60, 67, 0.6); letter-spacing: -0.01em; }
+.apple-sheet--dark .apple-subtitle { color: rgba(235, 235, 245, 0.6); }
+
+/* roomier rows and type */
+.apple-row { min-height: 60px; padding: 0 22px; gap: 16px; }
+.apple-row + .apple-row::before { left: 22px; }
+.apple-row-label { font-size: 17px; font-weight: 500; flex-basis: 36%; }
+.apple-field { height: 60px; font-size: 17px; }
+.apple-field--area { min-height: 120px; padding: 18px 0; }
+.apple-group { border-radius: 18px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); }
+.apple-group--light { background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 0 0 0.5px rgba(0, 0, 0, 0.06); }
+.apple-section-title { margin: 0 22px 10px; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; }
+.apple-error, .apple-footnote { margin: 10px 22px 0; font-size: 14px; }
+.apple-btn { height: 56px; padding: 0 32px; border-radius: 16px; font-size: 17px; }
+.apple-btn--primary { background: linear-gradient(180deg, #2b8cff 0%, #007aff 100%); box-shadow: 0 8px 20px rgba(0, 122, 255, 0.32); }
+.apple-btn--success { background: linear-gradient(180deg, #4cd964 0%, #34c759 100%); box-shadow: 0 8px 20px rgba(52, 199, 89, 0.32); }
+.apple-btn--secondary { background: rgba(120, 120, 128, 0.14); color: inherit; }
+.apple-btn--secondary:hover:not(:disabled) { background: rgba(120, 120, 128, 0.22); }
+.apple-btn--plain { font-size: 17px; }
+.apple-close { width: 36px; height: 36px; }
+.apple-stepper button { width: 56px; height: 38px; font-size: 24px; }
+.apple-segmented { padding: 3px; border-radius: 12px; }
+.apple-segmented > div { padding: 10px 0; font-size: 15px; border-radius: 10px; }
+.apple-footer { display: flex; gap: 16px; }
+.apple-footer .apple-btn--primary, .apple-footer .apple-btn--success { flex: 1; }
+.apple-summary-value { font-size: 20px; }
+
+/* two-column layout on wide screens */
+@media (min-width: 820px) {
+  .apple-sheet form, .apple-sheet .apple-step {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 40px;
+    row-gap: 32px;
+    align-items: start;
+  }
+  .apple-sheet form > *, .apple-sheet .apple-step > * { margin: 0 !important; }
+  .apple-sheet form > [role='alert'], .apple-sheet .apple-step > .text-center, .apple-sheet .apple-step > [role='alert'] { grid-column: 1 / -1; }
+}
+@media (max-width: 819px) {
+  .apple-sheet > .px-5, .apple-sheet > form.px-5 { padding-left: 24px; padding-right: 24px; }
+  .apple-title { font-size: 30px; }
+  .apple-overlay { padding: 8px; }
+}
+
+/* ===== Extra-large scale ===== */
+.apple-sheet { min-height: min(860px, calc(100vh - 48px)); border-radius: 36px; }
+.apple-sheet > form, .apple-sheet > .overflow-y-auto { flex: 1 1 auto; }
+.apple-sheet > .px-5, .apple-sheet > form.px-5 { padding-left: 72px; padding-right: 72px; }
+.apple-sheet > .pt-5 { padding-top: 56px; }
+.apple-sheet > .pb-5 { padding-bottom: 56px; }
+.apple-sheet > .pb-3 { padding-bottom: 28px; }
+.apple-sheet > .pt-2 { padding-top: 20px; }
+.apple-title { font-size: 56px; letter-spacing: -0.04em; }
+.apple-subtitle { font-size: 21px; margin-top: 12px; }
+.apple-row { min-height: 76px; padding: 0 28px; }
+.apple-row + .apple-row::before { left: 28px; }
+.apple-row-label { font-size: 20px; }
+.apple-field { height: 76px; font-size: 20px; }
+.apple-field--area { min-height: 160px; padding: 24px 0; }
+.apple-group { border-radius: 24px; }
+.apple-section-title { margin: 0 28px 14px; font-size: 14px; }
+.apple-error, .apple-footnote { margin: 12px 28px 0; font-size: 16px; }
+.apple-btn { height: 68px; font-size: 20px; border-radius: 20px; padding: 0 44px; }
+.apple-close { width: 44px; height: 44px; }
+.apple-close svg { width: 16px; height: 16px; }
+.apple-stepper button { width: 68px; height: 46px; font-size: 28px; }
+.apple-segmented > div { padding: 14px 0; font-size: 17px; }
+.apple-summary-value { font-size: 24px; }
+@media (min-width: 820px) { .apple-sheet form, .apple-sheet .apple-step { column-gap: 56px; row-gap: 44px; } }
+@media (max-width: 819px) {
+  .apple-sheet > .px-5, .apple-sheet > form.px-5 { padding-left: 24px; padding-right: 24px; }
+  .apple-sheet > .pt-5 { padding-top: 28px; } .apple-sheet > .pb-5 { padding-bottom: 28px; }
+  .apple-title { font-size: 34px; } .apple-subtitle { font-size: 16px; }
+  .apple-row { min-height: 60px; } .apple-field { height: 60px; font-size: 17px; } .apple-row-label { font-size: 17px; }
+  .apple-btn { height: 56px; font-size: 17px; padding: 0 24px; }
+  .apple-sheet { min-height: 0; border-radius: 28px; }
+}
+.apple-group--dark { background: #2c2c2e; box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.1); }

@@ -141,15 +141,13 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
 
     return (
         <div className="apple-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className={`apple-ui apple-sheet apple-sheet--${mode}`} style={{ maxWidth: 520 }} role="dialog" aria-modal="true" aria-label="Guest Check-In">
-                <div className="flex items-center justify-between px-5 pt-5 pb-3">
-                    <button type="button" className="apple-btn apple-btn--plain" style={{ height: 30, minWidth: 60, textAlign: 'left', padding: 0 }} onClick={onClose}>
-                        Cancel
-                    </button>
-                    <h2 className="text-[17px] font-semibold">Guest Check-In</h2>
-                    <div style={{ minWidth: 60, textAlign: 'right' }}>
-                        <button type="button" className="apple-close" onClick={onClose} aria-label="Close"><CloseIcon /></button>
-                    </div>
+            <div className={`apple-ui apple-sheet apple-sheet--${mode}`} style={{ maxWidth: 1240 }} role="dialog" aria-modal="true" aria-label="Guest Check-In">
+                <div className="flex items-start justify-between px-5 pt-5 pb-3">
+                  <div>
+                    <h2 className="apple-title">Guest Check-In</h2>
+                    <p className="apple-subtitle">Register an arriving guest and assign a room.</p>
+                  </div>
+                  <button type="button" className="apple-close" onClick={onClose} aria-label="Close"><CloseIcon /></button>
                 </div>
 
                 <form className="flex-1 overflow-y-auto px-5 pt-2 pb-4 space-y-6" style={{ overflowX: 'hidden' }} onSubmit={(e) => { e.preventDefault(); handleCompleteCheckIn(); }}>
@@ -216,8 +214,8 @@ const CheckInModal = ({ isOpen, onClose, onAddGuest }) => {
                     </div>
                 </form>
 
-                <div className="px-5 pb-5 pt-2">
-                    <button type="button" className="apple-btn apple-btn--primary w-full" onClick={handleCompleteCheckIn}>
+<div className="px-5 pb-5 pt-2 apple-footer">
+                  <button type="button" className="apple-btn apple-btn--secondary" onClick={onClose}>Cancel</button><button type="button" className="apple-btn apple-btn--primary" onClick={handleCompleteCheckIn}>
                         Complete Check-In
                     </button>
                 </div>

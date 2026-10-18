@@ -168,14 +168,14 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
       closeTimeoutMS={250}
       overlayClassName="apple-overlay"
       className={`apple-ui apple-sheet apple-sheet--${mode}`}
-      style={{ content: { maxWidth: 520 } }}
+      style={{ content: { maxWidth: 1240 } }}
     >
-      <div className="flex items-center justify-between px-5 pt-5 pb-3">
-        <button type="button" className="apple-btn apple-btn--plain" style={{ height: 30, minWidth: 60, textAlign: 'left', padding: 0 }} onClick={handleModalClose}>Cancel</button>
-        <h2 className="text-[17px] font-semibold">New Reservation</h2>
-        <div style={{ minWidth: 60, textAlign: 'right' }}>
-          <button type="button" className="apple-close" onClick={handleModalClose} aria-label="Close"><CloseIcon /></button>
+      <div className="flex items-start justify-between px-5 pt-5 pb-3">
+        <div>
+          <h2 className="apple-title">New Reservation</h2>
+          <p className="apple-subtitle">Create a booking for an upcoming stay.</p>
         </div>
+        <button type="button" className="apple-close" onClick={handleModalClose} aria-label="Close"><CloseIcon /></button>
       </div>
 
       <form id="new-reservation-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 pt-2 pb-4 space-y-6" style={{ overflowX: 'hidden' }}>
@@ -249,8 +249,8 @@ const NewReservationModal = ({ isOpen, onRequestClose, onAddReservation }) => {
         )}
       </form>
 
-      <div className="px-5 pb-5 pt-2">
-        <button type="submit" form="new-reservation-form" className="apple-btn apple-btn--primary w-full">Create Reservation</button>
+<div className="px-5 pb-5 pt-2 apple-footer">
+        <button type="button" className="apple-btn apple-btn--secondary" onClick={handleModalClose}>Cancel</button><button type="submit" form="new-reservation-form" className="apple-btn apple-btn--primary">Create Reservation</button>
       </div>
     </Modal>
   );
