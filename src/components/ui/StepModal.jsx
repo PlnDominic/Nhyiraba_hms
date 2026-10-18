@@ -168,9 +168,12 @@ export const RoomCards = ({ rooms, selectedId, onSelect, price, label, meta }) =
                 className={`sm-room sm-room--${key.toLowerCase()} ${selected ? 'is-selected' : ''}`}
                 onClick={() => isFree && onSelect(room.id)}
               >
-                <span className="sm-room-top"><b>{label(room)}</b><i className="sm-dot" /></span>
-                <span className="sm-room-meta">{meta(room)}</span>
-                <span className="sm-room-foot">{isFree ? (p > 0 ? `₵${p}` : 'Available') : room.status}</span>
+                <span className="sm-room-head">
+                  <span className="sm-room-id"><b>{label(room)}</b><small>{meta(room)}</small></span>
+                  {p > 0 && <span className="sm-room-price">GH₵{p}</span>}
+                </span>
+                {!isFree && <span className="sm-room-chip">{room.status}</span>}
+                <i className="sm-dot sm-dot--corner" />
               </button>
             );
           })}

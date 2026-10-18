@@ -460,26 +460,26 @@ const OfflineRoomsPage = () => {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
               {filteredRooms.map((room) => (
                 <div
                   key={room.id}
-                  className={`${getRoomStatusClass(room.status)} border-2 rounded-xl p-6 cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-lg transform`}
+                  className={`${getRoomStatusClass(room.status)} border rounded-lg p-2.5 cursor-pointer transition-all duration-200 hover:scale-[1.03] hover:shadow-lg transform`}
                   onClick={() => handleRoomClick(room)}
                   onContextMenu={(e) => handleContextMenu(e, room)}
                   onMouseEnter={(e) => handleMouseOver(e, room)}
                   onMouseLeave={handleMouseOut}
                 >
                   <div className="text-center">
-                    <div className="text-4xl mb-3">{getRoomStatusIndicator(room.status)}</div>
-                    <h3 className="text-xl font-bold mb-2">Room {room.id}</h3>
-                    <p className="text-sm opacity-80 mb-2">{room.type}</p>
-                    <div className={`inline-block px-3 py-1 rounded-full text-xs font-medium mb-3 ${getRoomStatusClass(room.status)}`}>
+                    <div className="text-xl mb-1">{getRoomStatusIndicator(room.status)}</div>
+                    <h3 className="text-sm font-bold mb-0.5">Room {room.id}</h3>
+                    <p className="text-xs opacity-80 mb-1">{room.type}</p>
+                    <div className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium mb-1 ${getRoomStatusClass(room.status)}`}>
                       {room.status}
                     </div>
                     {room.guest_name && (
-                      <div className="mt-3 pt-3 border-t border-current border-opacity-20">
-                        <p className="text-sm font-medium">👤 {room.guest_name}</p>
+                      <div className="mt-1 pt-1 border-t border-current border-opacity-20">
+                        <p className="text-xs font-medium truncate">👤 {room.guest_name}</p>
                         {room.check_in_date && (
                           <p className="text-xs opacity-70 mt-1">
                             Since: {new Date(room.check_in_date).toLocaleDateString()}
@@ -487,7 +487,7 @@ const OfflineRoomsPage = () => {
                         )}
                       </div>
                     )}
-                    <div className="mt-3 text-xs opacity-60">
+                    <div className="mt-1 text-[10px] opacity-60">
                       ${room.price_per_night}/night
                     </div>
                   </div>

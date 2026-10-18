@@ -322,7 +322,7 @@ const RoomsPage = () => {
               Click on a room for quick actions • Right-click for all options
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 mt-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-2 mt-4">
               {filteredRooms.map((room) => {
                 // Display actual room price from database
                 const priceDisplay = `GH₵${room.price || 0}`;
@@ -359,30 +359,30 @@ const RoomsPage = () => {
               return (
                 <div
                   key={room.id}
-                    className={`relative p-3 rounded-lg cursor-pointer hover:shadow-lg transition-all duration-300 border backdrop-blur-sm h-32 flex flex-col justify-between text-sm ${getRoomStatusClass(room.status)}`}
+                    className={`relative p-2 rounded-lg cursor-pointer hover:shadow-lg transition-all duration-300 border backdrop-blur-sm h-[88px] flex flex-col justify-between text-xs ${getRoomStatusClass(room.status)}`}
                     onClick={() => handleCheckIn(room.id)}
                   onMouseOver={(e) => handleMouseOver(e, room)}
                   onMouseOut={handleMouseOut}
                   onContextMenu={(e) => handleContextMenu(e, room)}
                 >
-                    <div className={`absolute ${getRoomStatusIndicator(room.status)} w-2.5 h-2.5 rounded-full bottom-2 right-2`}></div>
+                    <div className={`absolute ${getRoomStatusIndicator(room.status)} w-2 h-2 rounded-full bottom-1.5 right-1.5`}></div>
                     
                     <div className="flex justify-between items-start w-full">
                       <div className="flex flex-col items-start">
-                        <span className={`text-base font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                        <span className={`text-sm font-bold leading-tight ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                           {room.name || `Room ${room.room_number}`}
                         </span>
-                        <span className={`text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                        <span className={`text-[11px] leading-tight ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                           {room.type}
                         </span>
                       </div>
-                      <div className={`font-semibold text-xs ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                      <div className={`font-semibold text-[11px] ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
                         {priceDisplay}
                       </div>
                     </div>
                     
                     {room.guest && (
-                      <div className={`flex items-center mt-1 px-2 py-1 rounded-md ${isDarkMode ? 'bg-slate-700/50' : 'bg-gray-100'}`}>
+                      <div className={`flex items-center px-1.5 py-0.5 rounded-md ${isDarkMode ? 'bg-slate-700/50' : 'bg-gray-100'}`}>
                         <i className={`fas fa-user text-xs mr-1 ${isDarkMode ? 'text-blue-400' : 'text-blue-500'}`}></i>
                         <span className="text-xs truncate max-w-full">
                           {room.guest}
@@ -391,7 +391,7 @@ const RoomsPage = () => {
                     )}
                     
                     {!room.guest && room.status !== 'Available' && (
-                      <div className={`flex items-center mt-1 px-2 py-1 rounded-md ${isDarkMode ? 'bg-slate-700/50' : 'bg-gray-100'}`}>
+                      <div className={`flex items-center px-1.5 py-0.5 rounded-md ${isDarkMode ? 'bg-slate-700/50' : 'bg-gray-100'}`}>
                         <i className={`fas fa-${room.status === 'Reserved' ? 'calendar-check' : 'tools'} text-xs mr-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}></i>
                         <span className="text-xs truncate max-w-full">
                     {room.status}

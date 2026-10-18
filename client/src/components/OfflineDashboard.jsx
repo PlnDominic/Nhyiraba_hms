@@ -670,21 +670,21 @@ const OfflineDashboard = () => {
           {/* Room Grid */}
           <div className={`${isDarkMode ? 'bg-gray-800/50' : 'bg-white/80'} backdrop-blur-sm rounded-xl border ${isDarkMode ? 'border-gray-700/50' : 'border-gray-200/50'} p-6 shadow-lg mb-8`}>
             <h2 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'} mb-6`}>Room Status</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2">
               {rooms.map((room) => (
                 <div
                   key={room.id}
-                  className={`${getRoomStatusClass(room.status, isDarkMode)} border rounded-lg p-4 cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-lg`}
+                  className={`${getRoomStatusClass(room.status, isDarkMode)} border rounded-lg p-2 cursor-pointer transition-all duration-200 hover:scale-[1.03] hover:shadow-lg`}
                   onClick={(e) => handleRoomClick(e, room)}
                   onContextMenu={(e) => handleRoomContextMenu(e, room)}
                   onMouseEnter={(e) => handleRoomMouseEnter(e, room)}
                   onMouseLeave={handleRoomMouseLeave}
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold">Room {room.id}</span>
-                    <span className="text-lg">{getRoomStatusIndicator(room.status)}</span>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-bold text-sm">Room {room.id}</span>
+                    <span className="text-sm">{getRoomStatusIndicator(room.status)}</span>
                   </div>
-                  <div className="text-sm opacity-80">
+                  <div className="text-xs opacity-80">
                     <p>{room.type}</p>
                     <p className="font-medium">{room.status}</p>
                     {room.guest && <p className="truncate">👤 {room.guest}</p>}

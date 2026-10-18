@@ -209,7 +209,7 @@ const RoomsPage = () => {
             <p>Error loading rooms: {error}</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2 p-3">
             {filteredRooms.map(room => {
               // Get the status color - matching Dashboard colors
               const statusColor = 
@@ -221,16 +221,16 @@ const RoomsPage = () => {
               return (
                 <div
                   key={room.id}
-                  className={`p-4 rounded-lg text-center cursor-pointer shadow hover:shadow-md transition-shadow ${statusColor}`}
+                  className={`p-2 rounded-lg text-center cursor-pointer shadow hover:shadow-md transition-shadow ${statusColor}`}
                   onMouseOver={(e) => handleMouseOver(e, room)}
                   onMouseOut={handleMouseOut}
                   onContextMenu={(e) => handleContextMenu(e, room)}
                 >
-                  <h3 className="text-xl font-bold mb-1">Room {room.id}</h3>
-                  <p className={`text-sm mb-2 text-white`}>
+                  <h3 className="text-sm font-bold leading-tight">Room {room.id}</h3>
+                  <p className={`text-xs mb-1 text-white`}>
                     {room.type}
                   </p>
-                  <span className={`px-2 py-1 text-xs rounded-full bg-opacity-30 bg-white text-white`}>
+                  <span className={`px-1.5 py-0.5 text-[10px] rounded-full bg-opacity-30 bg-white text-white`}>
                     {room.status}
                   </span>
                 </div>

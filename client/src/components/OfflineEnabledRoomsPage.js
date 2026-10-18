@@ -358,14 +358,14 @@ const OfflineEnabledRoomsPage = () => {
               Click on a room for quick actions • Right-click for all options
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 mt-4">
               {filteredRooms.map((room) => {
                 const priceDisplay = `GH₵${room.price || 0}`;
 
                 return (
                   <div
                     key={room.id}
-                    className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
+                    className={`p-2.5 rounded-lg border cursor-pointer transition-all duration-200 ${
                       room.status === 'Available' ? 'border-green-300 bg-green-50 hover:bg-green-100' :
                       room.status === 'Occupied' ? 'border-blue-300 bg-blue-50 hover:bg-blue-100' :
                       room.status === 'Reserved' ? 'border-yellow-300 bg-yellow-50 hover:bg-yellow-100' :
@@ -376,9 +376,9 @@ const OfflineEnabledRoomsPage = () => {
                     onMouseOver={(e) => handleMouseOver(e, room)}
                     onMouseOut={handleMouseOut}
                   >
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-bold text-lg">{room.name || `Room ${room.room_number}`}</h3>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                    <div className="flex justify-between items-start mb-1">
+                      <h3 className="font-bold text-sm">{room.name || `Room ${room.room_number}`}</h3>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                         room.status === 'Available' ? 'bg-green-200 text-green-800' :
                         room.status === 'Occupied' ? 'bg-blue-200 text-blue-800' :
                         room.status === 'Reserved' ? 'bg-yellow-200 text-yellow-800' :
@@ -387,9 +387,8 @@ const OfflineEnabledRoomsPage = () => {
                         {room.status}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-600 mb-1">Type: {room.type}</p>
-                    <p className="text-sm text-gray-600 mb-2">Price: {priceDisplay}/night</p>
-                    <p className="text-sm text-gray-600">Capacity: {room.capacity} guests</p>
+                    <p className="text-xs text-gray-600">{room.type} · {priceDisplay}/night</p>
+                    <p className="text-xs text-gray-600">Capacity: {room.capacity} guests</p>
                   </div>
                 );
               })}
