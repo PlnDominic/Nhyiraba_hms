@@ -27,6 +27,9 @@ const Dashboard = lazy(() => import('./components/Dashboard'));
 const GuestsPage = lazy(() => import('./components/GuestsPage'));
 const GuestProfilesPage = lazy(() => import('./components/GuestProfilesPage'));
 const CommunicationCenterPage = lazy(() => import('./components/CommunicationCenterPage'));
+const LeavePage = lazy(() => import('./components/LeavePage'));
+const CertificationsPage = lazy(() => import('./components/CertificationsPage'));
+const PerformanceReviewsPage = lazy(() => import('./components/PerformanceReviewsPage'));
 const TasksPage = lazy(() => import('./components/TasksPage'));
 const BillingPage = lazy(() => import('./components/BillingPage'));
 const ServicesPage = lazy(() => import('./components/ServicesPage'));
@@ -152,6 +155,21 @@ const App = () => {
       <Route path="/guest-profiles" element={
         <ProtectedRoute>
           <GuestProfilesPage key="guest-profiles" />
+        </ProtectedRoute>
+      } />
+      <Route path="/leave" element={
+        <ProtectedRoute>
+          <LeavePage key="leave" />
+        </ProtectedRoute>
+      } />
+      <Route path="/certifications" element={
+        <ProtectedRoute>
+          <CertificationsPage key="certifications" />
+        </ProtectedRoute>
+      } />
+      <Route path="/reviews" element={
+        <ProtectedRoute>
+          <PerformanceReviewsPage key="reviews" />
         </ProtectedRoute>
       } />
       <Route path="/communications" element={
