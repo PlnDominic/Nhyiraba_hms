@@ -105,13 +105,14 @@ const CommunicationCenterPage = () => {
 
   return (
     <DashboardLayout activeLink="Communications" title="Communication Center">
-      <div className={`cc-page${dark ? ' cc-page--dark' : ''} space-y-6 pb-10`}>
+      <div className={`cc-page${dark ? ' cc-page--dark' : ''} space-y-4 pb-8`}>
         {notice && <div role="status" className={`rounded-xl border px-4 py-3 text-sm ${notice.type === 'error' ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'}`}>{notice.message}</div>}
         <div>
-          <h1 className="text-2xl font-bold">Communication center</h1>
+          <h1 className="text-xl font-bold">Communication center</h1>
           <p className="text-sm opacity-70">Send guest SMS and track delivery.</p>
         </div>
 
+        <div className="cc-layout">
         <section className="cc-card" aria-labelledby="cc-title">
           <div className="cc-card-head"><h2 id="cc-title">Send an SMS</h2></div>
           <form onSubmit={send} className="cc-body">
@@ -187,6 +188,7 @@ const CommunicationCenterPage = () => {
             </div>
           )}
         </section>
+        </div>
       </div>
     </DashboardLayout>
   );
